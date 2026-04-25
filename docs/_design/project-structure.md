@@ -337,8 +337,8 @@ Python · FastAPI · Centrifugo
 | ✅ **B2 — MCP server** | `start_council`, `join`, `contribute`, `recall_precedent`, `close` tools |
 | **B3 — Async councils** | Quorum-based async deliberation, cursor polling, timeout policy |
 | ✅ **B4 — Templates** | Built-in templates (architecture-review, security-audit, code-review, red-team, product-decision, solo), template inheritance, `GET /v1/templates` |
-| **B5 — Deliberation quality** | Multi-round deliberation, convergence detection, red team mode |
-| **B6 — Workflows** | Conflict detection, approval chains, council chains, auto-promotion, demotion |
+| ✅ **B5 — Deliberation quality** | Multi-round deliberation, convergence detection, red team mode |
+| ✅ **B6 — Workflows** | Conflict detection vs precedents, `pending_approval` status, approval/reject endpoints, `conflict_detected` thread events |
 | **B7 — Scheduling** | Scheduled, recurring (cron), and externally triggered councils |
 | **B8 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering |
 | **B9 — RBAC + Webhooks** | Full role model, API keys, outbound HMAC-signed webhooks, export integrations |
@@ -355,10 +355,10 @@ Svelte + SvelteKit · targets the OpenAPI contract
 |-------|-------------|
 | ✅ **W1 — Core** | Chat entry point (Mode 1), council list, stage streaming via Centrifugo, verdict display |
 | ✅ **W2 — Human-in-the-loop** | Mode 2 participation, directives (`@redirect`, `@veto`, `@add`, `@close`), `DirectivePicker` autocomplete |
-| **W3 — Mode 3 chat** | Chat with closed verdict, related precedents surfaced |
-| **W4 — Memory explorer** | Search and browse Astrocyte banks |
-| **W5 — Templates + Scheduling** | Template picker, schedule builder, triggered council UI |
-| **W6 — Workflows** | Conflict alerts, approval UI, council chain viewer |
+| ✅ **W3 — Mode 3 chat** | Chat with closed verdict via `POST /v1/councils/{id}/chat`, Astrocyte reflect, events retained to memory |
+| ✅ **W4 — Memory explorer** | `GET /v1/memory/search`, `/memory` page with bank switcher, score bars, tag pills |
+| ✅ **W5 — Templates** | Template picker on home page, `GET /v1/templates`, `TemplatePicker.svelte` |
+| ✅ **W6 — Workflows** | `conflict_detected` thread card, amber approval banner, Approve/Reject buttons, `pending_approval` status badge |
 | **W7 — Analytics** | Member leaderboard, decision velocity dashboard, topic clustering |
 | **W8 — Admin** | RBAC management, API keys, webhook registration, MIP routing traces |
 | **W9 — Notifications + preferences** | In-app notification feed, per-user preference settings |
@@ -404,6 +404,6 @@ Tracks are independent but some phases have natural synchronisation points:
 | ✅ MCP tools available | B2 ✅ | Agent integrations can use `start_council` |
 | ✅ Human-in-the-loop API | B1 ✅ | W2 ✅ |
 | ✅ Templates API | B4 ✅ | W5 template picker can ship |
-| Workflows API | B6 complete | W6 approval UI can ship |
+| ✅ Workflows API | B6 ✅ | W6 ✅ approval UI shipped |
 | Analytics API | B8 complete | W7 dashboard can ship |
 | Full RBAC + webhooks | B9 complete | W8 admin panel can ship |

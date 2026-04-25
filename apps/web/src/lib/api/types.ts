@@ -48,6 +48,7 @@ export interface CouncilDetail extends CouncilSummary {
 	template_id: string | null;
 	members: Record<string, unknown>[];
 	chairman: Record<string, unknown>;
+	conflict_metadata: Record<string, unknown> | null;
 }
 
 export interface CreateCouncilResponse {
@@ -98,5 +99,6 @@ export type CouncilStatus =
 	| 'stage_1'
 	| 'stage_2'
 	| 'stage_3'
+	| 'pending_approval'
 	| 'closed'
 	| 'failed';

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { getCouncil, getCouncilThread, sendMessage, closeCouncil, chatWithVerdict } from '$lib/api/client';
+	import { getCouncil, getCouncilThread, sendMessage, closeCouncil, approveCouncil, chatWithVerdict } from '$lib/api/client';
 	import { subscribeToThread, type Unsubscriber } from '$lib/stores/centrifugo';
 	import { threadEvents, loadHistory, appendEvent, clearThread } from '$lib/stores/thread';
 	import ChatThread from '$lib/components/chat/ChatThread.svelte';
@@ -9,7 +9,7 @@
 	import VerdictCard from '$lib/components/council/VerdictCard.svelte';
 	import type { CouncilDetail } from '$lib/api/types';
 
-	const sessionId = $page.params.id;
+	const sessionId = $page.params.id!;
 
 	let council = $state<CouncilDetail | null>(null);
 	let threadId = $state<string | null>(null);
@@ -17,6 +17,8 @@
 	let error = $state('');
 	let sendError = $state('');
 	let sending = $state(false);
+	let approving = $state(false);
+	let approveError = $state('');
 	let unsubscribe: Unsubscriber | null = null;
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -50,7 +52,7 @@
 
 			unsubscribe = subscribeToThread(threadId, (event) => {
 				appendEvent(event);
-				if (event.event_type === 'verdict') {
+				if (event.event_type === 'verdict' || event.event_type === 'conflict_detected') {
 					refreshCouncil();
 				}
 			});
@@ -95,11 +97,38 @@
 		}
 	}
 
+	async function handleApprove() {
+		approving = true;
+		approveError = '';
+		try {
+			await approveCouncil(sessionId);
+			await refreshCouncil();
+		} catch (err) {
+			approveError = err instanceof Error ? err.message : 'Approval failed';
+		} finally {
+			approving = false;
+		}
+	}
+
+	async function handleReject() {
+		approving = true;
+		approveError = '';
+		try {
+			await closeCouncil(sessionId);
+			await refreshCouncil();
+		} catch (err) {
+			approveError = err instanceof Error ? err.message : 'Close failed';
+		} finally {
+			approving = false;
+		}
+	}
+
 	const statusLabel: Record<string, string> = {
 		pending: 'Starting…',
 		stage_1: 'Gathering responses',
 		stage_2: 'Peer ranking',
 		stage_3: 'Synthesising verdict',
+		pending_approval: 'Pending approval',
 		closed: 'Closed',
 		failed: 'Failed'
 	};
@@ -130,6 +159,39 @@
 			</div>
 		</div>
 
+		{#if council.status === 'pending_approval'}
+			<div class="shrink-0 border-b border-amber-800/40 bg-amber-950/20 px-5 py-4">
+				<div class="flex items-start gap-3">
+					<svg class="mt-0.5 h-5 w-5 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+					</svg>
+					<div class="flex-1 min-w-0">
+						<p class="text-sm font-semibold text-amber-300">Verdict requires approval</p>
+						<p class="mt-0.5 text-xs text-amber-400/70">This verdict may conflict with a previous decision. Review the conflict below, then approve or reject.</p>
+						{#if approveError}
+							<p class="mt-1 text-xs text-red-400">{approveError}</p>
+						{/if}
+					</div>
+					<div class="flex shrink-0 gap-2">
+						<button
+							onclick={handleReject}
+							disabled={approving}
+							class="rounded-lg border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-700 disabled:opacity-50"
+						>
+							Reject
+						</button>
+						<button
+							onclick={handleApprove}
+							disabled={approving}
+							class="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+						>
+							{approving ? 'Approving…' : 'Approve'}
+						</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+
 		{#if council.status === 'closed' && council.verdict}
 			<div class="shrink-0 border-b border-zinc-800 px-5 py-4">
 				<VerdictCard {council} />
@@ -147,9 +209,11 @@
 			<ChatInput
 				placeholder={council.status === 'closed'
 					? 'Ask a follow-up question about this verdict…'
-					: 'Contribute context to the deliberation…'}
+					: council.status === 'pending_approval'
+						? 'Approve or reject the verdict above before continuing…'
+						: 'Contribute context to the deliberation…'}
 				submitting={sending}
-				showDirectives={council.status !== 'closed' && council.status !== 'failed'}
+				showDirectives={council.status !== 'closed' && council.status !== 'failed' && council.status !== 'pending_approval'}
 				onsubmit={handleSend}
 			/>
 		</div>

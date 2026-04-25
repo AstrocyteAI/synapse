@@ -129,6 +129,33 @@
 		</div>
 	</div>
 
+{:else if event.event_type === 'conflict_detected'}
+	<div class="rounded-xl border border-amber-500/40 bg-amber-950/30 p-4">
+		<div class="mb-2 flex items-center gap-2">
+			<svg class="h-4 w-4 shrink-0 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+			</svg>
+			<span class="text-xs font-semibold uppercase tracking-wider text-amber-400">Conflict Detected</span>
+		</div>
+		<p class="text-sm text-amber-100/90 whitespace-pre-wrap">{event.content}</p>
+		{#if event.metadata?.conflicting_content}
+			<button
+				class="mt-3 flex w-full items-center gap-2 text-left text-xs text-amber-400/70 hover:text-amber-300"
+				onclick={() => (expanded = !expanded)}
+			>
+				<span>Prior decision</span>
+				<svg class="ml-auto h-3.5 w-3.5 transition-transform {expanded ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+				</svg>
+			</button>
+			{#if expanded}
+				<p class="mt-2 rounded-lg bg-amber-950/50 px-3 py-2 text-xs text-amber-200/70 whitespace-pre-wrap">
+					{String(event.metadata.conflicting_content)}
+				</p>
+			{/if}
+		{/if}
+	</div>
+
 {:else if event.event_type === 'system_event'}
 	<div class="flex items-center gap-3 py-0.5">
 		<div class="h-px flex-1 bg-zinc-800"></div>

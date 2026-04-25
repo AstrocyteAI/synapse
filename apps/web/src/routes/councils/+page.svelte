@@ -22,6 +22,7 @@
 		stage_1: 'Gathering',
 		stage_2: 'Ranking',
 		stage_3: 'Synthesising',
+		pending_approval: 'Pending approval',
 		closed: 'Closed',
 		failed: 'Failed'
 	};
@@ -31,6 +32,7 @@
 		stage_1: 'text-blue-300 bg-blue-900/40',
 		stage_2: 'text-blue-300 bg-blue-900/40',
 		stage_3: 'text-blue-300 bg-blue-900/40',
+		pending_approval: 'text-amber-300 bg-amber-900/40',
 		closed: 'text-green-300 bg-green-900/40',
 		failed: 'text-red-400 bg-red-900/30'
 	};
