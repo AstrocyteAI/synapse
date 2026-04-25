@@ -43,9 +43,11 @@ jobs:
 
       - name: Start backing services
         run: |
-          docker compose up -d postgres astrocyte-postgres astrocyte-gateway
+          docker compose up -d postgres astrocyte-postgres astrocyte-gateway centrifugo
         env:
           ASTROCYTE_TOKEN: dev-astrocyte-api-key
+          CENTRIFUGO_API_KEY: dev-centrifugo-api-key
+          CENTRIFUGO_TOKEN_SECRET: dev-centrifugo-token-secret
 
       - name: Wait for Postgres (synapse)
         run: |
@@ -73,6 +75,13 @@ jobs:
           done
           echo "Gateway is ready."
 
+      - name: Wait for Centrifugo
+        run: |
+          until curl -sf http://localhost:8001/health; do
+            echo "  centrifugo not ready, retrying..."; sleep 2
+          done
+          echo "Centrifugo is ready."
+
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -99,11 +108,13 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://synapse:synapse@localhost:5432/synapse
           ASTROCYTE_GATEWAY_URL: http://localhost:8080
           ASTROCYTE_TOKEN: dev-astrocyte-api-key
+          CENTRIFUGO_API_URL: http://localhost:8002
+          CENTRIFUGO_API_KEY: dev-centrifugo-api-key
         run: uv run pytest -m integration -v
 
       - name: Dump service logs on failure
         if: failure()
-        run: docker compose logs astrocyte-gateway astrocyte-postgres
+        run: docker compose logs astrocyte-gateway astrocyte-postgres centrifugo
 
       - name: Tear down services
         if: always()

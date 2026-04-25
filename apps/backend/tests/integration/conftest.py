@@ -1,10 +1,10 @@
-"""Integration test fixtures — requires a live Astrocyte gateway.
+"""Integration test fixtures — requires live Astrocyte gateway and Centrifugo.
 
 Run with:
-    docker compose up -d astrocyte-postgres astrocyte-gateway
+    docker compose up -d astrocyte-postgres astrocyte-gateway centrifugo
     pytest -m integration
 
-Or set ASTROCYTE_GATEWAY_URL to point at a running instance.
+Or point at running instances via environment variables.
 """
 
 from __future__ import annotations
@@ -18,9 +18,12 @@ import pytest_asyncio
 
 from synapse.memory.context import AstrocyteContext
 from synapse.memory.gateway_client import AstrocyteGatewayClient
+from synapse.realtime.centrifugo import CentrifugoClient
 
 GATEWAY_URL = os.environ.get("ASTROCYTE_GATEWAY_URL", "http://localhost:8080")
 GATEWAY_API_KEY = os.environ.get("ASTROCYTE_TOKEN", "dev-astrocyte-api-key")
+CENTRIFUGO_API_URL = os.environ.get("CENTRIFUGO_API_URL", "http://localhost:8002")
+CENTRIFUGO_API_KEY = os.environ.get("CENTRIFUGO_API_KEY", "dev-centrifugo-api-key")
 
 
 def pytest_configure(config):
@@ -51,6 +54,16 @@ def pytest_addoption(parser):
 async def http_client():
     async with httpx.AsyncClient(timeout=30.0) as client:
         yield client
+
+
+@pytest_asyncio.fixture(scope="session")
+async def centrifugo_client(http_client):
+    """Real CentrifugoClient — requires Centrifugo at CENTRIFUGO_API_URL."""
+    return CentrifugoClient(
+        api_url=CENTRIFUGO_API_URL,
+        api_key=CENTRIFUGO_API_KEY,
+        http_client=http_client,
+    )
 
 
 @pytest_asyncio.fixture(scope="session")
