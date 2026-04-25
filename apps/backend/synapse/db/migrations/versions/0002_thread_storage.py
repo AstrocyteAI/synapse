@@ -9,6 +9,7 @@ threads       — chat container (1:1 with council_sessions, nullable for future
 thread_events — append-only event log; BIGSERIAL PK used as ordering primitive
                 and pagination cursor
 """
+
 from __future__ import annotations
 
 import sqlalchemy as sa

@@ -46,6 +46,7 @@ def override_settings(monkeypatch):
 # JWT helper
 # ---------------------------------------------------------------------------
 
+
 def make_jwt(
     sub: str = "user-1",
     principal: str = "user-1",
@@ -66,6 +67,7 @@ def make_jwt(
 # Default council fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def default_members() -> list[CouncilMember]:
     return [
@@ -82,7 +84,9 @@ def default_chairman() -> CouncilMember:
 @pytest.fixture
 def sample_stage1_responses() -> list[StageOneResponse]:
     return [
-        StageOneResponse(member_id="openai/gpt-4o", member_name="GPT-4o", content="Response A content"),
+        StageOneResponse(
+            member_id="openai/gpt-4o", member_name="GPT-4o", content="Response A content"
+        ),
         StageOneResponse(
             member_id="anthropic/claude-3-5-sonnet-20241022",
             member_name="Claude",
@@ -94,7 +98,10 @@ def sample_stage1_responses() -> list[StageOneResponse]:
 @pytest.fixture
 def sample_ranking_result(sample_stage1_responses) -> RankingResult:
     return RankingResult(
-        label_map={"Response A": "openai/gpt-4o", "Response B": "anthropic/claude-3-5-sonnet-20241022"},
+        label_map={
+            "Response A": "openai/gpt-4o",
+            "Response B": "anthropic/claude-3-5-sonnet-20241022",
+        },
         member_rankings=[
             MemberRanking(
                 member_id="openai/gpt-4o",
@@ -117,14 +124,29 @@ def sample_ranking_result(sample_stage1_responses) -> RankingResult:
 @pytest.fixture
 def sample_precedents() -> list[MemoryHit]:
     return [
-        MemoryHit(memory_id="hit-1", content="Past decision about testing.", score=0.9, bank_id="precedents", tags=[], metadata={}),
-        MemoryHit(memory_id="hit-2", content="Prior council verdict.", score=0.8, bank_id="precedents", tags=[], metadata={}),
+        MemoryHit(
+            memory_id="hit-1",
+            content="Past decision about testing.",
+            score=0.9,
+            bank_id="precedents",
+            tags=[],
+            metadata={},
+        ),
+        MemoryHit(
+            memory_id="hit-2",
+            content="Prior council verdict.",
+            score=0.8,
+            bank_id="precedents",
+            tags=[],
+            metadata={},
+        ),
     ]
 
 
 # ---------------------------------------------------------------------------
 # Mock LLM client
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_llm():
@@ -136,6 +158,7 @@ def mock_llm():
 # ---------------------------------------------------------------------------
 # Mock Astrocyte gateway client
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_astrocyte(sample_precedents):
@@ -151,6 +174,7 @@ def mock_astrocyte(sample_precedents):
 # Mock Centrifugo client
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_centrifugo():
     client = AsyncMock()
@@ -162,6 +186,7 @@ def mock_centrifugo():
 # ---------------------------------------------------------------------------
 # FastAPI test client (sync, no real DB)
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def test_token() -> str:

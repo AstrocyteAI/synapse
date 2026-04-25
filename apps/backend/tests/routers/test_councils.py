@@ -18,6 +18,7 @@ from tests.conftest import TEST_SETTINGS, make_jwt
 # App fixture with fully mocked infrastructure
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def app(mock_astrocyte, mock_centrifugo, mock_llm):
     """Create a test app with state wired up to mocks — no real DB."""
@@ -67,6 +68,7 @@ def headers(token):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_council_session(**kwargs) -> CouncilSession:
     defaults = dict(
         id=uuid.uuid4(),
@@ -98,6 +100,7 @@ def _make_council_session(**kwargs) -> CouncilSession:
 # POST /v1/councils
 # ---------------------------------------------------------------------------
 
+
 def test_create_council_returns_202(client, db_session, headers):
     session_id = uuid.uuid4()
     mock_cs = _make_council_session(id=session_id, status=CouncilStatus.pending)
@@ -110,11 +113,11 @@ def test_create_council_returns_202(client, db_session, headers):
         patch("synapse.routers.councils.asyncio.create_task"),
         patch("synapse.council.session.create_session", new=AsyncMock(return_value=mock_cs)),
     ):
-            resp = client.post(
-                "/v1/councils",
-                json={"question": "What should we prioritise?"},
-                headers=headers,
-            )
+        resp = client.post(
+            "/v1/councils",
+            json={"question": "What should we prioritise?"},
+            headers=headers,
+        )
 
     assert resp.status_code == 202
     body = resp.json()
@@ -135,6 +138,7 @@ def test_create_council_validates_question(client, headers):
 # ---------------------------------------------------------------------------
 # GET /v1/councils/{session_id}
 # ---------------------------------------------------------------------------
+
 
 def test_get_council_returns_session(client, db_session, headers):
     session_id = uuid.uuid4()
@@ -169,6 +173,7 @@ def test_get_council_403_on_wrong_tenant(client, headers):
 # GET /v1/councils
 # ---------------------------------------------------------------------------
 
+
 def test_list_councils_returns_list(client, headers):
     sessions = [
         _make_council_session(id=uuid.uuid4()),
@@ -195,6 +200,7 @@ def test_list_councils_requires_auth(client):
 # ---------------------------------------------------------------------------
 # GET /v1/centrifugo/token
 # ---------------------------------------------------------------------------
+
 
 def test_centrifugo_token_returns_token(client, headers):
     resp = client.get("/v1/centrifugo/token", headers=headers)

@@ -20,6 +20,7 @@ pytestmark = pytest.mark.integration
 # retain → recall round-trip
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_retain_and_recall(gateway, context, run_id):
     content = f"The council decided to proceed with plan Bravo. [{run_id}]"
@@ -115,6 +116,7 @@ async def test_retain_multiple_then_recall_ranked(gateway, context, run_id):
 # reflect
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_reflect_synthesises_retained_content(gateway, context, run_id):
     await gateway.retain(
@@ -134,12 +136,17 @@ async def test_reflect_synthesises_retained_content(gateway, context, run_id):
     assert result.answer
     assert len(result.answer) > 10
     # Should reference the two-week rule somewhere
-    assert "two" in result.answer.lower() or "week" in result.answer.lower() or "review" in result.answer.lower()
+    assert (
+        "two" in result.answer.lower()
+        or "week" in result.answer.lower()
+        or "review" in result.answer.lower()
+    )
 
 
 # ---------------------------------------------------------------------------
 # forget
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_forget_by_tags(gateway, context, run_id):
@@ -182,6 +189,7 @@ async def test_forget_by_tags(gateway, context, run_id):
 # ---------------------------------------------------------------------------
 # Precedents bank — used by council Stage 1
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_retain_and_recall_precedents(gateway, context, run_id):

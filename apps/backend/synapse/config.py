@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # --- LLM ---
     synapse_llm_provider: Literal["litellm"] = "litellm"
-    litellm_api_base: str = ""   # empty = direct library calls; set for proxy
+    litellm_api_base: str = ""  # empty = direct library calls; set for proxy
     litellm_api_key: str = ""
 
     # --- Council defaults ---

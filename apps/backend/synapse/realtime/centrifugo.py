@@ -43,7 +43,9 @@ class CentrifugoClient:
             _logger.error("Centrifugo publish failed for channel %s: %s", channel, e)
             raise
 
-    async def publish_council_event(self, council_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    async def publish_council_event(
+        self, council_id: str, event_type: str, payload: dict[str, Any]
+    ) -> None:
         """Publish a structured council stage event."""
         await self.publish(
             channel=f"council:{council_id}",

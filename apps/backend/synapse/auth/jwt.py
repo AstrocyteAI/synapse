@@ -20,7 +20,7 @@ _logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class AuthenticatedUser:
     sub: str
-    principal: str           # e.g. "user:abc123"
+    principal: str  # e.g. "user:abc123"
     tenant_id: str | None
     roles: list[str]
     raw_claims: dict[str, Any]

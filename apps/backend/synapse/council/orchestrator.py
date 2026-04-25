@@ -100,12 +100,15 @@ class CouncilOrchestrator:
             timeout=self._settings.stage1_timeout_seconds,
         )
 
-        await publish("stage1_complete", {
-            "responses": [
-                {"member_id": r.member_id, "member_name": r.member_name, "content": r.content}
-                for r in stage1_responses
-            ],
-        })
+        await publish(
+            "stage1_complete",
+            {
+                "responses": [
+                    {"member_id": r.member_id, "member_name": r.member_name, "content": r.content}
+                    for r in stage1_responses
+                ],
+            },
+        )
 
         # --- Stage 2: Rank (skip for solo councils) ---
         await set_status(CouncilStatus.stage_2)
@@ -113,6 +116,7 @@ class CouncilOrchestrator:
 
         if council_type == "solo" or len(stage1_responses) == 1:
             from synapse.council.models import MemberRanking, RankingResult
+
             label = "A"
             label_map = {f"Response {label}": stage1_responses[0].member_id}
             ranking_result = RankingResult(
@@ -137,11 +141,14 @@ class CouncilOrchestrator:
             )
 
         dissent_detected = self._detect_dissent(ranking_result)
-        await publish("stage2_complete", {
-            "consensus_score": ranking_result.consensus_score,
-            "aggregate_scores": ranking_result.aggregate_scores,
-            "dissent_detected": dissent_detected,
-        })
+        await publish(
+            "stage2_complete",
+            {
+                "consensus_score": ranking_result.consensus_score,
+                "aggregate_scores": ranking_result.aggregate_scores,
+                "dissent_detected": dissent_detected,
+            },
+        )
 
         # --- Stage 3: Synthesise ---
         await set_status(CouncilStatus.stage_3)
@@ -156,7 +163,10 @@ class CouncilOrchestrator:
             timeout=self._settings.stage3_timeout_seconds,
         )
 
-        await publish("stage3_complete", {"verdict": synthesis.verdict, "confidence_label": synthesis.confidence_label})
+        await publish(
+            "stage3_complete",
+            {"verdict": synthesis.verdict, "confidence_label": synthesis.confidence_label},
+        )
 
         # --- Persist to DB ---
         session = await db.get(CouncilSession, session_id)
@@ -174,7 +184,10 @@ class CouncilOrchestrator:
                 stage1_responses=[r.model_dump() for r in stage1_responses],
                 stage2_rankings=[r.model_dump() for r in ranking_result.member_rankings],
                 aggregate_scores=ranking_result.aggregate_scores,
-                stage3_verdict={"verdict": synthesis.verdict, "confidence_label": synthesis.confidence_label},
+                stage3_verdict={
+                    "verdict": synthesis.verdict,
+                    "confidence_label": synthesis.confidence_label,
+                },
             )
             db.add(transcript)
             await db.commit()
@@ -243,12 +256,8 @@ class CouncilOrchestrator:
             # semantic embedding captures the full deliberation context.
             parts = [f"Council: {question}"]
             if human_turns:
-                parts.append(
-                    "\n".join(f"[Human]: {msg}" for msg in human_turns)
-                )
-            parts.extend(
-                f"[{r.member_name}]: {r.content}" for r in stage1_responses
-            )
+                parts.append("\n".join(f"[Human]: {msg}" for msg in human_turns))
+            parts.extend(f"[{r.member_name}]: {r.content}" for r in stage1_responses)
             parts.append(f"Verdict: {synthesis.verdict}")
             full_transcript = "\n\n".join(parts)
             await self._astrocyte.retain(

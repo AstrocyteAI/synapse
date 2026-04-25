@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Pre-commit: ruff lint check for the Python backend.
+# Pre-commit: ruff lint + format check for the Python backend.
 # Install once with: git config core.hooksPath .githooks
 
 set -euo pipefail
@@ -12,6 +12,8 @@ if [ -z "$staged" ]; then
     exit 0
 fi
 
-echo "→ ruff check..."
 cd "$BACKEND"
+echo "→ ruff check..."
 uv run --with ruff ruff check synapse tests
+echo "→ ruff format --check..."
+uv run --with ruff ruff format --check synapse tests

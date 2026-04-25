@@ -18,6 +18,7 @@ from synapse.db.models import Thread, ThreadEvent, ThreadEventType
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_thread(**kwargs) -> Thread:
     defaults = dict(
         id=uuid.uuid4(),
@@ -53,6 +54,7 @@ def _make_event(id: int, thread_id: uuid.UUID, **kwargs) -> ThreadEvent:
 # ---------------------------------------------------------------------------
 # create_thread
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_create_thread_with_council():
@@ -94,6 +96,7 @@ async def test_create_thread_without_council():
 # ---------------------------------------------------------------------------
 # append_event
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_append_event_writes_to_db():
@@ -142,6 +145,7 @@ async def test_append_event_defaults_metadata_to_empty_dict():
 # ---------------------------------------------------------------------------
 # get_history — pagination direction
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_get_history_before_id_orders_desc():

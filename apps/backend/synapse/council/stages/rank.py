@@ -41,8 +41,7 @@ def _anonymise(responses: list[StageOneResponse]) -> tuple[list[dict], dict[str,
         for label, resp in zip(labels, responses, strict=True)
     ]
     label_map = {
-        f"Response {label}": resp.member_id
-        for label, resp in zip(labels, responses, strict=True)
+        f"Response {label}": resp.member_id for label, resp in zip(labels, responses, strict=True)
     }
     return anonymised, label_map
 
@@ -105,11 +104,11 @@ def _compute_kendalls_w(member_rankings: list[MemberRanking], labels: list[str])
     Kendall's W (coefficient of concordance) — measure of inter-rater agreement.
     Returns 0.0 (no agreement) to 1.0 (perfect agreement).
     """
-    m = len(member_rankings)   # number of raters
-    n = len(labels)            # number of items
+    m = len(member_rankings)  # number of raters
+    n = len(labels)  # number of items
 
     if m < 2 or n < 2:
-        return 1.0             # trivial case
+        return 1.0  # trivial case
 
     # Rank sums for each label across all raters
     rank_sums: dict[str, float] = {f"Response {lbl}": 0.0 for lbl in labels}
@@ -120,7 +119,7 @@ def _compute_kendalls_w(member_rankings: list[MemberRanking], labels: list[str])
 
     mean_rank_sum = m * (n + 1) / 2
     s = sum((rs - mean_rank_sum) ** 2 for rs in rank_sums.values())
-    denominator = m ** 2 * (n ** 3 - n) / 12
+    denominator = m**2 * (n**3 - n) / 12
 
     return round(s / denominator, 4) if denominator > 0 else 0.0
 
@@ -188,6 +187,7 @@ async def run_rank(
         # All members failed ranking — use identity order as fallback
         _logger.warning("All members failed Stage 2 — using identity ranking")
         from synapse.council.models import MemberRanking
+
         valid_rankings = [
             MemberRanking(
                 member_id="fallback",

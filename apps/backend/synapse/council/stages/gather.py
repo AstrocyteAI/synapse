@@ -112,6 +112,8 @@ async def run_gather(
 
     failed_count = len(results) - len(successful)
     if failed_count:
-        _logger.warning("%d member(s) failed in Stage 1 — continuing with %d", failed_count, len(successful))
+        _logger.warning(
+            "%d member(s) failed in Stage 1 — continuing with %d", failed_count, len(successful)
+        )
 
     return successful

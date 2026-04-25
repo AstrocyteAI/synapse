@@ -97,8 +97,12 @@ class CouncilTranscript(Base):
 
     # Stage outputs
     precedents: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
-    stage1_responses: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
-    stage2_rankings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    stage1_responses: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    stage2_rankings: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     aggregate_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     stage3_verdict: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
@@ -109,18 +113,19 @@ class CouncilTranscript(Base):
 # Thread storage — append-only chat event log
 # ---------------------------------------------------------------------------
 
+
 class ThreadEventType(StrEnum):
-    user_message     = "user_message"
-    council_started  = "council_started"
-    stage_progress   = "stage_progress"
-    member_response  = "member_response"
-    ranking_summary  = "ranking_summary"
-    verdict          = "verdict"
-    reflection       = "reflection"
-    precedent_hit    = "precedent_hit"
+    user_message = "user_message"
+    council_started = "council_started"
+    stage_progress = "stage_progress"
+    member_response = "member_response"
+    ranking_summary = "ranking_summary"
+    verdict = "verdict"
+    reflection = "reflection"
+    precedent_hit = "precedent_hit"
     summon_requested = "summon_requested"
-    member_summoned  = "member_summoned"
-    system_event     = "system_event"
+    member_summoned = "member_summoned"
+    system_event = "system_event"
 
 
 class Thread(Base):
@@ -147,7 +152,9 @@ class Thread(Base):
     )
 
     events: Mapped[list[ThreadEvent]] = relationship(
-        "ThreadEvent", back_populates="thread", cascade="all, delete-orphan",
+        "ThreadEvent",
+        back_populates="thread",
+        cascade="all, delete-orphan",
         order_by="ThreadEvent.id",
     )
     session: Mapped[CouncilSession | None] = relationship(
@@ -166,9 +173,7 @@ class ThreadEvent(Base):
 
     __tablename__ = "thread_events"
 
-    id: Mapped[int] = mapped_column(
-        BigInteger, Identity(always=True), primary_key=True
-    )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
     thread_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False
     )

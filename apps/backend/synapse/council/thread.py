@@ -44,9 +44,7 @@ async def get_thread_by_council(
     db: AsyncSession,
     council_id: uuid.UUID,
 ) -> Thread | None:
-    result = await db.execute(
-        select(Thread).where(Thread.council_id == council_id)
-    )
+    result = await db.execute(select(Thread).where(Thread.council_id == council_id))
     return result.scalar_one_or_none()
 
 

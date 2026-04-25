@@ -19,6 +19,7 @@ from synapse.council.stages.rank import (
 # _anonymise
 # ---------------------------------------------------------------------------
 
+
 def test_anonymise_labels_a_b_c():
     responses = [
         StageOneResponse(member_id="m1", member_name="One", content="aaa"),
@@ -37,12 +38,16 @@ def test_anonymise_labels_a_b_c():
 # _parse_ranking
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text,expected_first", [
-    ("FINAL RANKING:\n1. Response B\n2. Response A", "Response B"),
-    ("I think Response A is best.\nFINAL RANKING:\n1. Response A\n2. Response B", "Response A"),
-    # Fallback: no FINAL RANKING section
-    ("Response B was clearly superior to Response A.", "Response B"),
-])
+
+@pytest.mark.parametrize(
+    "text,expected_first",
+    [
+        ("FINAL RANKING:\n1. Response B\n2. Response A", "Response B"),
+        ("I think Response A is best.\nFINAL RANKING:\n1. Response A\n2. Response B", "Response A"),
+        # Fallback: no FINAL RANKING section
+        ("Response B was clearly superior to Response A.", "Response B"),
+    ],
+)
 def test_parse_ranking(text, expected_first):
     labels = ["A", "B"]
     result = _parse_ranking(text, labels)
@@ -62,10 +67,15 @@ def test_parse_ranking_fills_missing_labels():
 # _compute_aggregate_scores
 # ---------------------------------------------------------------------------
 
+
 def test_compute_aggregate_scores_perfect_agreement():
     rankings = [
-        MemberRanking(member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""),
-        MemberRanking(member_id="m2", member_name="M2", ranking=["Response A", "Response B"], raw_response=""),
+        MemberRanking(
+            member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""
+        ),
+        MemberRanking(
+            member_id="m2", member_name="M2", ranking=["Response A", "Response B"], raw_response=""
+        ),
     ]
     scores = _compute_aggregate_scores(rankings, ["A", "B"])
     assert scores["Response A"] == 1.0
@@ -74,8 +84,12 @@ def test_compute_aggregate_scores_perfect_agreement():
 
 def test_compute_aggregate_scores_split_vote():
     rankings = [
-        MemberRanking(member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""),
-        MemberRanking(member_id="m2", member_name="M2", ranking=["Response B", "Response A"], raw_response=""),
+        MemberRanking(
+            member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""
+        ),
+        MemberRanking(
+            member_id="m2", member_name="M2", ranking=["Response B", "Response A"], raw_response=""
+        ),
     ]
     scores = _compute_aggregate_scores(rankings, ["A", "B"])
     assert scores["Response A"] == scores["Response B"] == 1.5
@@ -85,11 +99,27 @@ def test_compute_aggregate_scores_split_vote():
 # _compute_kendalls_w
 # ---------------------------------------------------------------------------
 
+
 def test_kendalls_w_perfect_agreement():
     rankings = [
-        MemberRanking(member_id="m1", member_name="M1", ranking=["Response A", "Response B", "Response C"], raw_response=""),
-        MemberRanking(member_id="m2", member_name="M2", ranking=["Response A", "Response B", "Response C"], raw_response=""),
-        MemberRanking(member_id="m3", member_name="M3", ranking=["Response A", "Response B", "Response C"], raw_response=""),
+        MemberRanking(
+            member_id="m1",
+            member_name="M1",
+            ranking=["Response A", "Response B", "Response C"],
+            raw_response="",
+        ),
+        MemberRanking(
+            member_id="m2",
+            member_name="M2",
+            ranking=["Response A", "Response B", "Response C"],
+            raw_response="",
+        ),
+        MemberRanking(
+            member_id="m3",
+            member_name="M3",
+            ranking=["Response A", "Response B", "Response C"],
+            raw_response="",
+        ),
     ]
     w = _compute_kendalls_w(rankings, ["A", "B", "C"])
     assert w == pytest.approx(1.0, abs=0.01)
@@ -98,9 +128,24 @@ def test_kendalls_w_perfect_agreement():
 def test_kendalls_w_no_agreement():
     # Three raters, three items — reverse orders
     rankings = [
-        MemberRanking(member_id="m1", member_name="M1", ranking=["Response A", "Response B", "Response C"], raw_response=""),
-        MemberRanking(member_id="m2", member_name="M2", ranking=["Response B", "Response C", "Response A"], raw_response=""),
-        MemberRanking(member_id="m3", member_name="M3", ranking=["Response C", "Response A", "Response B"], raw_response=""),
+        MemberRanking(
+            member_id="m1",
+            member_name="M1",
+            ranking=["Response A", "Response B", "Response C"],
+            raw_response="",
+        ),
+        MemberRanking(
+            member_id="m2",
+            member_name="M2",
+            ranking=["Response B", "Response C", "Response A"],
+            raw_response="",
+        ),
+        MemberRanking(
+            member_id="m3",
+            member_name="M3",
+            ranking=["Response C", "Response A", "Response B"],
+            raw_response="",
+        ),
     ]
     w = _compute_kendalls_w(rankings, ["A", "B", "C"])
     assert 0.0 <= w <= 1.0
@@ -108,7 +153,9 @@ def test_kendalls_w_no_agreement():
 
 def test_kendalls_w_single_rater_returns_one():
     rankings = [
-        MemberRanking(member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""),
+        MemberRanking(
+            member_id="m1", member_name="M1", ranking=["Response A", "Response B"], raw_response=""
+        ),
     ]
     w = _compute_kendalls_w(rankings, ["A", "B"])
     assert w == 1.0
@@ -126,6 +173,7 @@ def test_kendalls_w_single_item_returns_one():
 # ---------------------------------------------------------------------------
 # run_rank
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_run_rank_returns_ranking_result(sample_stage1_responses, default_members):

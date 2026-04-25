@@ -27,6 +27,7 @@ class SendMessageRequest(BaseModel):
 # POST /v1/threads/{thread_id}/messages
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/threads/{thread_id}/messages",
     status_code=status.HTTP_201_CREATED,
@@ -58,6 +59,7 @@ async def send_message(
 # ---------------------------------------------------------------------------
 # GET /v1/threads/{thread_id}/events
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/threads/{thread_id}/events",
@@ -92,7 +94,9 @@ async def list_events(
     return {
         "thread_id": str(thread_id),
         "events": items,
-        "next_before_id": items[-1]["id"] if items and before_id is None and after_id is None else None,
+        "next_before_id": items[-1]["id"]
+        if items and before_id is None and after_id is None
+        else None,
         "count": len(items),
     }
 
@@ -100,6 +104,7 @@ async def list_events(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
 
 def _assert_thread_access(thread, user: AuthenticatedUser) -> None:
     if "admin" in (user.roles or []):

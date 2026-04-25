@@ -18,6 +18,7 @@ from tests.conftest import TEST_SETTINGS, make_jwt
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_thread(thread_id: uuid.UUID, tenant_id: str = "tenant-test") -> MagicMock:
     t = MagicMock()
     t.id = thread_id
@@ -52,6 +53,7 @@ def _make_event(
 # ---------------------------------------------------------------------------
 # App fixture — fully mocked, no real DB
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def app():
@@ -94,6 +96,7 @@ def auth_headers(token):
 # ---------------------------------------------------------------------------
 # POST /v1/threads/{thread_id}/messages
 # ---------------------------------------------------------------------------
+
 
 class TestSendMessage:
     def test_send_message_returns_201(self, client, db_session, auth_headers):
@@ -194,6 +197,7 @@ class TestSendMessage:
 # ---------------------------------------------------------------------------
 # GET /v1/threads/{thread_id}/events
 # ---------------------------------------------------------------------------
+
 
 class TestListEvents:
     def test_list_events_returns_events(self, client, auth_headers):
@@ -301,7 +305,9 @@ class TestListEvents:
 
     def test_list_events_limit_too_low_returns_422(self, client, auth_headers):
         thread_id = uuid.uuid4()
-        with patch("synapse.routers.threads.get_thread", AsyncMock(return_value=_make_thread(thread_id))):
+        with patch(
+            "synapse.routers.threads.get_thread", AsyncMock(return_value=_make_thread(thread_id))
+        ):
             resp = client.get(
                 f"/v1/threads/{thread_id}/events?limit=0",
                 headers=auth_headers,
@@ -310,7 +316,9 @@ class TestListEvents:
 
     def test_list_events_limit_too_high_returns_422(self, client, auth_headers):
         thread_id = uuid.uuid4()
-        with patch("synapse.routers.threads.get_thread", AsyncMock(return_value=_make_thread(thread_id))):
+        with patch(
+            "synapse.routers.threads.get_thread", AsyncMock(return_value=_make_thread(thread_id))
+        ):
             resp = client.get(
                 f"/v1/threads/{thread_id}/events?limit=201",
                 headers=auth_headers,
@@ -365,8 +373,14 @@ class TestListEvents:
 
         event = resp.json()["events"][0]
         assert set(event.keys()) >= {
-            "id", "thread_id", "event_type", "actor_id",
-            "actor_name", "content", "metadata", "created_at",
+            "id",
+            "thread_id",
+            "event_type",
+            "actor_id",
+            "actor_name",
+            "content",
+            "metadata",
+            "created_at",
         }
         assert event["content"] == "Test content"
         assert event["thread_id"] == str(thread_id)

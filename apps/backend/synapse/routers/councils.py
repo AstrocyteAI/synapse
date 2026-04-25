@@ -40,6 +40,7 @@ router = APIRouter(tags=["councils"])
 # Dependency helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_orchestrator(request: Request) -> CouncilOrchestrator:
     return CouncilOrchestrator(
         astrocyte=request.app.state.astrocyte,
@@ -70,6 +71,7 @@ def _resolve_chairman(
 # ---------------------------------------------------------------------------
 # POST /v1/councils
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/councils",
@@ -154,6 +156,7 @@ async def create_council(
 # GET /v1/councils
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/councils",
     summary="List council sessions for the current user",
@@ -179,6 +182,7 @@ async def list_councils(
 # GET /v1/councils/{session_id}
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/councils/{session_id}",
     summary="Get a council session by ID",
@@ -199,6 +203,7 @@ async def get_council(
 # ---------------------------------------------------------------------------
 # GET /v1/councils/{session_id}/thread
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/councils/{session_id}/thread",
@@ -225,6 +230,7 @@ async def get_council_thread(
 # ---------------------------------------------------------------------------
 # POST /v1/councils/{session_id}/chat  — Mode 3: chat with closed verdict
 # ---------------------------------------------------------------------------
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -304,6 +310,7 @@ async def chat_with_verdict(
 # GET /v1/councils/{session_id}/stream  — SSE fallback
 # ---------------------------------------------------------------------------
 
+
 @router.get(
     "/councils/{session_id}/stream",
     summary="SSE stream for council events (fallback — prefer Centrifugo WS)",
@@ -335,12 +342,14 @@ async def stream_council(
                     yield f"data: {data}\n\n"
                 if s.status in (CouncilStatus.closed, CouncilStatus.failed):
                     if s.status == CouncilStatus.closed:
-                        payload = json.dumps({
-                            "event": "session_closed",
-                            "verdict": s.verdict,
-                            "consensus_score": s.consensus_score,
-                            "confidence_label": s.confidence_label,
-                        })
+                        payload = json.dumps(
+                            {
+                                "event": "session_closed",
+                                "verdict": s.verdict,
+                                "consensus_score": s.consensus_score,
+                                "confidence_label": s.confidence_label,
+                            }
+                        )
                         yield f"data: {payload}\n\n"
                     break
                 await asyncio.sleep(1)
@@ -356,6 +365,7 @@ async def stream_council(
 # Private helpers
 # ---------------------------------------------------------------------------
 
+
 async def _retain_reflection(
     astrocyte,
     council_id: str,
@@ -366,11 +376,7 @@ async def _retain_reflection(
 ) -> None:
     """Retain a Mode 3 Q&A exchange to the councils bank. Fire-and-forget."""
     try:
-        content = (
-            f"Mode 3 Q&A — Council {council_id}\n\n"
-            f"Q: {question}\n\n"
-            f"A: {answer}"
-        )
+        content = f"Mode 3 Q&A — Council {council_id}\n\nQ: {question}\n\nA: {answer}"
         await astrocyte.retain(
             content=content,
             bank_id=Banks.COUNCILS,

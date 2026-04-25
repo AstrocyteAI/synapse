@@ -24,6 +24,7 @@ async def client():
 # Headers
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_retain_sends_auth_headers():
     async with AsyncClient() as http:
@@ -51,8 +52,22 @@ async def test_recall_returns_memory_hits():
         gw = AstrocyteGatewayClient(base_url=BASE_URL, api_key=API_KEY, http_client=http)
 
         hits_payload = [
-            {"memory_id": "h1", "content": "Past ruling about X.", "score": 0.92, "bank_id": "precedents", "tags": [], "metadata": {}},
-            {"memory_id": "h2", "content": "Prior decision about Y.", "score": 0.81, "bank_id": "precedents", "tags": [], "metadata": {}},
+            {
+                "memory_id": "h1",
+                "content": "Past ruling about X.",
+                "score": 0.92,
+                "bank_id": "precedents",
+                "tags": [],
+                "metadata": {},
+            },
+            {
+                "memory_id": "h2",
+                "content": "Prior decision about Y.",
+                "score": 0.81,
+                "bank_id": "precedents",
+                "tags": [],
+                "metadata": {},
+            },
         ]
         with respx.mock(base_url=BASE_URL) as mock:
             mock.post("/v1/recall").respond(200, json={"memories": hits_payload})
@@ -121,6 +136,7 @@ async def test_recall_payload_includes_bank_and_context():
             )
 
             import json
+
             body = json.loads(mock.calls.last.request.content)
             assert body["bank_id"] == "precedents"
             assert body["query"] == "question"

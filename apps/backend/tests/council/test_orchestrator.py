@@ -62,6 +62,7 @@ def chairman():
 # Happy path — full council
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_orchestrator_run_full_council(orchestrator, mock_db, two_members, chairman, context):
     """Full 3-stage run should return a CouncilResult with verdict."""
@@ -84,7 +85,9 @@ async def test_orchestrator_run_full_council(orchestrator, mock_db, two_members,
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_publishes_stage_events(orchestrator, mock_db, two_members, chairman, context):
+async def test_orchestrator_publishes_stage_events(
+    orchestrator, mock_db, two_members, chairman, context
+):
     """Centrifugo publish_council_event should be called for key lifecycle events."""
     with patch("synapse.council.orchestrator.asyncio.create_task"):
         await orchestrator.run(
@@ -108,6 +111,7 @@ async def test_orchestrator_publishes_stage_events(orchestrator, mock_db, two_me
 # ---------------------------------------------------------------------------
 # Solo council — Stage 2 bypassed
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_orchestrator_solo_council_bypasses_rank(orchestrator, mock_db, context):
@@ -154,6 +158,7 @@ async def test_orchestrator_single_member_bypasses_rank(orchestrator, mock_db, c
 # Dissent detection
 # ---------------------------------------------------------------------------
 
+
 def test_detect_dissent_below_threshold(orchestrator, sample_ranking_result):
     sample_ranking_result.consensus_score = 0.3
     assert orchestrator._detect_dissent(sample_ranking_result) is True
@@ -173,8 +178,11 @@ def test_detect_dissent_single_member(orchestrator, sample_ranking_result):
 # Precedent recall failure — should continue gracefully
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
-async def test_orchestrator_continues_without_precedents(orchestrator, mock_db, two_members, chairman, context):
+async def test_orchestrator_continues_without_precedents(
+    orchestrator, mock_db, two_members, chairman, context
+):
     orchestrator._astrocyte.recall = AsyncMock(side_effect=Exception("Astrocyte unavailable"))
 
     with patch("synapse.council.orchestrator.asyncio.create_task"):

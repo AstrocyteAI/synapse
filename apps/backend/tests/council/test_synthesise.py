@@ -18,14 +18,18 @@ from synapse.council.stages.synthesise import (
 # _extract_confidence
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("text,expected", [
-    ("My verdict here.\nCONFIDENCE: HIGH", "high"),
-    ("Some text.\nCONFIDENCE: MEDIUM", "medium"),
-    ("Uncertain outcome.\nCONFIDENCE: LOW", "low"),
-    ("I strongly recommend this approach.", "high"),
-    ("This is [UNCERTAIN] in some aspects.", "low"),
-    ("A reasonable outcome overall.", "medium"),  # fallback
-])
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("My verdict here.\nCONFIDENCE: HIGH", "high"),
+        ("Some text.\nCONFIDENCE: MEDIUM", "medium"),
+        ("Uncertain outcome.\nCONFIDENCE: LOW", "low"),
+        ("I strongly recommend this approach.", "high"),
+        ("This is [UNCERTAIN] in some aspects.", "low"),
+        ("A reasonable outcome overall.", "medium"),  # fallback
+    ],
+)
 def test_extract_confidence(text, expected):
     assert _extract_confidence(text) == expected
 
@@ -33,6 +37,7 @@ def test_extract_confidence(text, expected):
 # ---------------------------------------------------------------------------
 # _extract_uncertainty_markers
 # ---------------------------------------------------------------------------
+
 
 def test_extract_uncertainty_markers_found():
     text = "The timeline is [UNCERTAIN] due to factors.\nThe cost [UNCERTAIN] as well."
@@ -48,6 +53,7 @@ def test_extract_uncertainty_markers_none():
 # ---------------------------------------------------------------------------
 # _strip_confidence_footer
 # ---------------------------------------------------------------------------
+
 
 def test_strip_confidence_footer():
     text = "My verdict text.\nCONFIDENCE: HIGH"
@@ -65,6 +71,7 @@ def test_strip_confidence_footer_no_footer():
 # _rank_responses_for_chairman
 # ---------------------------------------------------------------------------
 
+
 def test_rank_responses_for_chairman_ordered_by_score(
     sample_stage1_responses, sample_ranking_result
 ):
@@ -78,6 +85,7 @@ def test_rank_responses_for_chairman_ordered_by_score(
 # ---------------------------------------------------------------------------
 # run_synthesise
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_run_synthesise_returns_synthesis(
@@ -107,10 +115,7 @@ async def test_run_synthesise_captures_uncertainty_markers(
 ):
     llm = AsyncMock()
     llm.complete = AsyncMock(
-        return_value=(
-            "Proceed but note [UNCERTAIN] timeline risk.\n"
-            "CONFIDENCE: MEDIUM"
-        )
+        return_value=("Proceed but note [UNCERTAIN] timeline risk.\nCONFIDENCE: MEDIUM")
     )
 
     result = await run_synthesise(

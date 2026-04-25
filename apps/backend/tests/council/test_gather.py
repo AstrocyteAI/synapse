@@ -19,12 +19,22 @@ from synapse.memory.gateway_client import MemoryHit
 # _format_precedents
 # ---------------------------------------------------------------------------
 
+
 def test_format_precedents_empty():
     assert _format_precedents([]) == ""
 
 
 def test_format_precedents_includes_content():
-    hits = [MemoryHit(memory_id="h1", content="Some past decision.", score=0.9, bank_id="precedents", tags=[], metadata={})]
+    hits = [
+        MemoryHit(
+            memory_id="h1",
+            content="Some past decision.",
+            score=0.9,
+            bank_id="precedents",
+            tags=[],
+            metadata={},
+        )
+    ]
     result = _format_precedents(hits)
     assert "Some past decision." in result
     assert "1." in result
@@ -32,7 +42,16 @@ def test_format_precedents_includes_content():
 
 def test_format_precedents_truncates_long_content():
     long_content = "x" * 600
-    hits = [MemoryHit(memory_id="h1", content=long_content, score=0.8, bank_id="precedents", tags=[], metadata={})]
+    hits = [
+        MemoryHit(
+            memory_id="h1",
+            content=long_content,
+            score=0.8,
+            bank_id="precedents",
+            tags=[],
+            metadata={},
+        )
+    ]
     result = _format_precedents(hits)
     # Should truncate at 500 chars
     assert "x" * 500 in result
@@ -42,6 +61,7 @@ def test_format_precedents_truncates_long_content():
 # ---------------------------------------------------------------------------
 # _build_system_prompt
 # ---------------------------------------------------------------------------
+
 
 def test_build_system_prompt_includes_name():
     member = CouncilMember(model_id="openai/gpt-4o", name="MyBot")
@@ -67,7 +87,16 @@ def test_build_system_prompt_override():
 
 def test_build_system_prompt_with_precedents():
     member = CouncilMember(model_id="openai/gpt-4o", name="Bot")
-    hits = [MemoryHit(memory_id="h1", content="Prior ruling.", score=0.85, bank_id="precedents", tags=[], metadata={})]
+    hits = [
+        MemoryHit(
+            memory_id="h1",
+            content="Prior ruling.",
+            score=0.85,
+            bank_id="precedents",
+            tags=[],
+            metadata={},
+        )
+    ]
     prompt = _build_system_prompt(member, hits)
     assert "Prior ruling." in prompt
 
@@ -75,6 +104,7 @@ def test_build_system_prompt_with_precedents():
 # ---------------------------------------------------------------------------
 # run_gather
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def two_members():

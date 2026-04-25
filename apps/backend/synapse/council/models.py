@@ -10,15 +10,15 @@ from pydantic import BaseModel, Field
 
 class CouncilMember(BaseModel):
     model_id: str
-    name: str = ""                       # derived from model_id if empty
-    role: str = ""                       # injected into system prompt
-    system_prompt_override: str = ""     # replaces default system prompt if set
+    name: str = ""  # derived from model_id if empty
+    role: str = ""  # injected into system prompt
+    system_prompt_override: str = ""  # replaces default system prompt if set
 
 
 class CreateCouncilRequest(BaseModel):
     question: str
-    members: list[CouncilMember] | None = None   # uses defaults if None
-    chairman: CouncilMember | None = None         # uses default if None
+    members: list[CouncilMember] | None = None  # uses defaults if None
+    chairman: CouncilMember | None = None  # uses default if None
     council_type: str = "llm"
     template_id: str | None = None
     topic_tag: str | None = None
@@ -26,7 +26,7 @@ class CreateCouncilRequest(BaseModel):
 
 
 class StageOneResponse(BaseModel):
-    member_id: str          # e.g. "openai/gpt-4o"
+    member_id: str  # e.g. "openai/gpt-4o"
     member_name: str
     content: str
     error: str | None = None
@@ -35,20 +35,20 @@ class StageOneResponse(BaseModel):
 class MemberRanking(BaseModel):
     member_id: str
     member_name: str
-    ranking: list[str]      # ordered labels: ["Response B", "Response A", "Response C"]
+    ranking: list[str]  # ordered labels: ["Response B", "Response A", "Response C"]
     raw_response: str
 
 
 class RankingResult(BaseModel):
-    label_map: dict[str, str]               # {"Response A": "member_id", ...}
+    label_map: dict[str, str]  # {"Response A": "member_id", ...}
     member_rankings: list[MemberRanking]
-    aggregate_scores: dict[str, float]      # {"Response A": 1.67, ...}  (lower = better rank)
-    consensus_score: float                  # Kendall's W [0, 1]
+    aggregate_scores: dict[str, float]  # {"Response A": 1.67, ...}  (lower = better rank)
+    consensus_score: float  # Kendall's W [0, 1]
 
 
 class SynthesisResult(BaseModel):
     verdict: str
-    confidence_label: str   # high | medium | low
+    confidence_label: str  # high | medium | low
     uncertainty_markers: list[str] = Field(default_factory=list)
 
 

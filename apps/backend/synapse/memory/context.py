@@ -10,6 +10,7 @@ from synapse.auth.jwt import AuthenticatedUser
 @dataclass(frozen=True)
 class AstrocyteContext:
     """Passed to every Astrocyte gateway call for per-bank access control."""
+
     principal: str
     tenant_id: str | None = None
 
