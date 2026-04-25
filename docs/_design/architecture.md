@@ -15,6 +15,7 @@ Synapse owns:
 - The **deliberation pipeline** — structured stages for gathering, ranking, and synthesising agent opinions; multi-round cycles and red team mode
 - The **template engine** — built-in and custom council templates with field inheritance
 - The **chat layer** — three modes: starting a council via chat, participating during a council (human-in-the-loop), and chatting with a closed verdict via Astrocyte `reflect()`
+- The **thread event log** — append-only, cursor-paginated Postgres store of every chat event in a session; the authoritative replay record (distinct from Astrocyte memory, which is the semantic search index)
 - The **real-time layer** — Centrifugo sidecar handling all WebSocket and SSE connections; FastAPI publishes events, Centrifugo delivers to clients
 - The **event bus and webhook dispatcher** — outbound HMAC-signed webhook delivery of council lifecycle events; export integrations (Notion, Confluence, GitHub, Linear, Markdown)
 - The **scheduler** — one-time, recurring (cron), and externally triggered councils
@@ -105,7 +106,24 @@ The core of Synapse. Manages session state and runs the deliberation pipeline.
 - `rank.py` — Stage 2: anonymised peer review; each member ranks the others; aggregate scores computed
 - `synthesise.py` — Stage 3: chairman model synthesises a final verdict given all Stage 1 responses and Stage 2 rankings
 
-### 3.2 AstrocyteGatewayClient
+### 3.2 Thread event log
+
+The thread event log is Synapse's chat storage — an append-only `thread_events` table in Postgres that records every event in a conversation in order. It is the authoritative replay record for the chat UI.
+
+Two tables:
+
+- **`threads`** — the chat container. Every council session creates one thread (`council_id` FK). Future standalone chat (no council) also creates threads. Decouples the chat surface from the council lifecycle.
+- **`thread_events`** — the event log. `BIGSERIAL` PK is both the global ordering primitive and the pagination cursor. Partitioned by `(thread_id, id DESC)` for efficient history queries.
+
+Event types: `user_message`, `council_started`, `stage_progress`, `member_response`, `ranking_summary`, `verdict`, `reflection`, `precedent_hit`, `summon_requested`, `member_summoned`, `system_event`.
+
+The write path: user messages are appended immediately by the chat router; council lifecycle events are appended by the orchestrator as the pipeline progresses. Centrifugo delivery and Postgres writes are decoupled — the event log is the source of truth; Centrifugo is the delivery mechanism.
+
+History retrieval uses cursor-based pagination on the `id` column (`before_id` / `after_id`) — never SQL `OFFSET`. This is O(1) regardless of history depth, the same pattern used by Discord (Snowflake scan), Slack (`ts`-bounded scan), and Telegram (`pts` cursor).
+
+See `chat.md` section 8 for the full storage design.
+
+### 3.4 AstrocyteGatewayClient
 
 A Python module that wraps all Astrocyte operations via HTTP. Synapse connects to Astrocyte exclusively in **Gateway mode** — there is no in-process library mode.
 
@@ -135,7 +153,7 @@ context = AstrocyteContext(
 
 HTTP calls are made via `httpx` (async). The gateway URL and auth token are read from environment config.
 
-### 3.3 Centrifugo (real-time sidecar)
+### 3.5 Centrifugo (real-time sidecar)
 
 Centrifugo is a Go binary that manages all persistent client connections — WebSocket for council participants (Modes 1 + 2) and SSE for read-only observers. FastAPI never holds WebSocket connections; it only publishes events.
 
@@ -155,7 +173,7 @@ await centrifugo.publish(
 
 Centrifugo provides **presence** (who is connected to a channel) and **history** (reconnecting clients catch up on missed events automatically).
 
-### 3.4 MCP Server
+### 3.6 MCP Server
 
 Exposes council primitives as MCP tools for agent-to-agent access. Any MCP-capable client (Claude Code, Cursor, Windsurf) can join councils without additional integration.
 
@@ -166,7 +184,7 @@ Tools:
 - `recall_precedent` — search past council decisions relevant to a query
 - `close_council` — finalise the session and persist the verdict
 
-### 3.5 REST API
+### 3.7 REST API
 
 Consumed by web, desktop, and mobile frontends. All API calls go to FastAPI. Real-time events flow via Centrifugo.
 
@@ -175,7 +193,10 @@ Consumed by web, desktop, and mobile frontends. All API calls go to FastAPI. Rea
 | `POST /v1/councils` | REST | Start a new council |
 | `GET /v1/councils` | REST | List councils |
 | `GET /v1/councils/{id}` | REST | Fetch full council transcript |
+| `GET /v1/councils/{id}/thread` | REST | Get the thread ID for a council |
 | `GET /v1/centrifugo/token` | REST | Issue Centrifugo connection JWT for a client |
+| `POST /v1/threads/{id}/messages` | REST | Send a user message (Modes 1+2) |
+| `GET /v1/threads/{id}/events` | REST | Paginated thread history (`before_id` / `after_id` / `limit`) |
 | `POST /v1/councils/{id}/chat` | REST | Chat with closed verdict — Mode 3 (`reflect()`) |
 | `GET /v1/memory/search` | REST | Search past council decisions |
 | `GET /v1/templates` | REST | List and fetch council templates |
@@ -192,7 +213,7 @@ Consumed by web, desktop, and mobile frontends. All API calls go to FastAPI. Rea
 - Mode 2 (human-in-the-loop) — same Centrifugo channel for incoming events; directives (`@redirect`, `@veto`, `@add`) sent to FastAPI via REST
 - Mode 3 (chat with verdict) — pure REST; stateless request/response via Astrocyte `reflect()`
 
-### 3.6 Frontends
+### 3.8 Frontends
 
 Three surfaces, one backend API:
 
@@ -301,11 +322,19 @@ Three-tier verdict memory, plus per-agent context:
 **Write pattern after Stage 3:**
 
 ```python
-# Full transcript → councils bank (for auditing and Mode 3 reflect)
-await astrocyte.retain(format_full_transcript(session), bank_id="councils", ...)
+# Full transcript → councils bank
+# Includes human turns (Mode 2) + agent responses + verdict
+await astrocyte.retain(format_full_transcript(session, human_turns), bank_id="councils", ...)
 
 # Concise verdict → decisions bank (for agent search and conflict detection)
 await astrocyte.retain(format_verdict_summary(session), bank_id="decisions", ...)
+```
+
+**Write pattern on Mode 3 reflection** (chat router, per Q&A exchange):
+
+```python
+# Post-verdict Q&A → councils bank (appended to session memory)
+await astrocyte.retain(format_reflection(question, answer, sources), bank_id="councils", ...)
 ```
 
 **Promotion path:** `decisions` → `precedents`. The promotion workflow (see `workflows.md`) promotes a concise `decisions` entry into `precedents` when confidence is high or a human approves. The full transcript in `councils` is never promoted — it remains the audit record.

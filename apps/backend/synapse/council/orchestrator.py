@@ -50,7 +50,16 @@ class CouncilOrchestrator:
         db: AsyncSession,
         council_type: str = "llm",
         topic_tag: str | None = None,
+        human_turns: list[str] | None = None,
     ) -> CouncilResult:
+        """Run the full council pipeline.
+
+        Args:
+            human_turns: Mode 2 messages injected by a human participant during
+                deliberation. Included verbatim in the transcript retained to the
+                ``councils`` Astrocyte bank so future councils can recall not just
+                what agents said but also the human context that shaped the session.
+        """
         council_id = str(session_id)
 
         async def publish(event_type: str, payload: dict) -> None:
@@ -182,6 +191,7 @@ class CouncilOrchestrator:
                 council_type=council_type,
                 topic_tag=topic_tag,
                 context=context,
+                human_turns=human_turns or [],
             )
         )
 
@@ -217,17 +227,31 @@ class CouncilOrchestrator:
         council_type: str,
         topic_tag: str | None,
         context: AstrocyteContext,
+        human_turns: list[str] | None = None,
     ) -> None:
-        """Retain full transcript + verdict summary to Astrocyte. Fire-and-forget."""
+        """Retain full transcript + verdict summary to Astrocyte. Fire-and-forget.
+
+        The transcript written to the ``councils`` bank includes human turns
+        (Mode 2 messages) so future councils can recall the full deliberation
+        context — not just what agents said, but what the human contributed.
+
+        Reflection events (Mode 3 Q&A) are retained separately by the chat
+        router at the point they occur, not here.
+        """
         try:
             # Full transcript → councils bank
-            full_transcript = (
-                f"Council: {question}\n\n"
-                + "\n\n".join(
-                    f"[{r.member_name}]: {r.content}" for r in stage1_responses
+            # Human turns are interleaved before agent responses so the
+            # semantic embedding captures the full deliberation context.
+            parts = [f"Council: {question}"]
+            if human_turns:
+                parts.append(
+                    "\n".join(f"[Human]: {msg}" for msg in human_turns)
                 )
-                + f"\n\nVerdict: {synthesis.verdict}"
+            parts.extend(
+                f"[{r.member_name}]: {r.content}" for r in stage1_responses
             )
+            parts.append(f"Verdict: {synthesis.verdict}")
+            full_transcript = "\n\n".join(parts)
             await self._astrocyte.retain(
                 content=full_transcript,
                 bank_id=Banks.COUNCILS,
