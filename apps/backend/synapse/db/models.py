@@ -105,6 +105,10 @@ class CouncilTranscript(Base):
     )
     aggregate_scores: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     stage3_verdict: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # Multi-round deliberation — [{round, critiques, revised_responses, converged}]
+    deliberation_rounds: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
 
     session: Mapped[CouncilSession] = relationship("CouncilSession", back_populates="transcript")
 

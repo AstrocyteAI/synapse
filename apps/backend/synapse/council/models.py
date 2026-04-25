@@ -52,6 +52,20 @@ class SynthesisResult(BaseModel):
     uncertainty_markers: list[str] = Field(default_factory=list)
 
 
+class MemberCritique(BaseModel):
+    member_id: str
+    member_name: str
+    critique: str
+    error: str | None = None
+
+
+class DeliberationRound(BaseModel):
+    round: int
+    critiques: list[MemberCritique]
+    revised_responses: list[StageOneResponse]
+    converged: bool = False
+
+
 class CouncilResult(BaseModel):
     session_id: uuid.UUID
     question: str
@@ -59,6 +73,7 @@ class CouncilResult(BaseModel):
     consensus_score: float
     confidence_label: str
     dissent_detected: bool
-    stage1_responses: list[StageOneResponse]
+    stage1_responses: list[StageOneResponse]  # final-round responses going into ranking
     ranking_result: RankingResult
     synthesis: SynthesisResult
+    deliberation_rounds: list[DeliberationRound] = Field(default_factory=list)
