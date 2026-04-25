@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from synapse.council.models import CouncilMember, CreateCouncilRequest
+from synapse.council.models import ContributeRequest, CouncilMember, CreateCouncilRequest
 from synapse.db.models import CouncilSession, CouncilStatus
 
 
@@ -20,11 +21,22 @@ async def create_session(
     created_by: str,
     tenant_id: str | None = None,
 ) -> CouncilSession:
-    """Insert a new CouncilSession in pending state and return it."""
+    """Insert a new CouncilSession and return it.
+
+    Status is ``scheduled`` when ``request.run_at`` is set, otherwise ``pending``.
+    Async-council fields (quorum, contribution_deadline) are persisted when present.
+    """
+    initial_status = CouncilStatus.scheduled if request.run_at else CouncilStatus.pending
+    contribution_deadline = None
+    if request.contribution_deadline_hours is not None:
+        contribution_deadline = datetime.now(UTC) + timedelta(
+            hours=request.contribution_deadline_hours
+        )
+
     session = CouncilSession(
         id=uuid.uuid4(),
         question=request.question,
-        status=CouncilStatus.pending,
+        status=initial_status,
         council_type=request.council_type,
         members=[m.model_dump() for m in members],
         chairman=chairman.model_dump(),
@@ -33,11 +45,45 @@ async def create_session(
         template_id=request.template_id,
         created_by=created_by,
         tenant_id=tenant_id,
+        quorum=request.quorum,
+        contribution_deadline=contribution_deadline,
+        run_at=request.run_at,
     )
     db.add(session)
     await db.commit()
     await db.refresh(session)
     return session
+
+
+async def add_contribution(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    body: ContributeRequest,
+    *,
+    member_type: str = "human",
+) -> CouncilSession:
+    """Append a contribution to an async council session and return it."""
+    session = await db.get(CouncilSession, session_id)
+    if not session:
+        raise ValueError(f"Session {session_id} not found")
+    entry: dict[str, Any] = {
+        "member_id": body.member_id,
+        "member_name": body.member_name,
+        "content": body.content,
+        "member_type": member_type,
+        "submitted_at": datetime.now(UTC).isoformat(),
+    }
+    # JSONB mutation — replace the list to trigger SQLAlchemy change detection
+    session.contributions = [*session.contributions, entry]
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
+def quorum_met(session: CouncilSession) -> bool:
+    """Return True when the session has enough contributions to proceed."""
+    effective = session.quorum or len(session.members)
+    return len(session.contributions) >= effective
 
 
 async def get_session(

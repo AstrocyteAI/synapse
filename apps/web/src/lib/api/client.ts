@@ -88,6 +88,18 @@ export async function approveCouncil(
 	});
 }
 
+export async function contributeToCouncil(
+	sessionId: string,
+	memberId: string,
+	memberName: string,
+	content: string
+): Promise<{ session_id: string; contributions_received: number; quorum: number; quorum_met: boolean }> {
+	return request(`/v1/councils/${sessionId}/contribute`, {
+		method: 'POST',
+		body: JSON.stringify({ member_id: memberId, member_name: memberName, content })
+	});
+}
+
 // ---------------------------------------------------------------------------
 // Threads
 // ---------------------------------------------------------------------------

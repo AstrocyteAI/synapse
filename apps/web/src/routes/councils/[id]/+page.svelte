@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { getCouncil, getCouncilThread, sendMessage, closeCouncil, approveCouncil, chatWithVerdict } from '$lib/api/client';
+	import { getCouncil, getCouncilThread, sendMessage, closeCouncil, approveCouncil, chatWithVerdict, contributeToCouncil } from '$lib/api/client';
 	import { subscribeToThread, type Unsubscriber } from '$lib/stores/centrifugo';
 	import { threadEvents, loadHistory, appendEvent, clearThread } from '$lib/stores/thread';
 	import ChatThread from '$lib/components/chat/ChatThread.svelte';
@@ -22,7 +22,8 @@
 	let unsubscribe: Unsubscriber | null = null;
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 
-	const activeStatuses = new Set(['pending', 'stage_1', 'stage_2', 'stage_3']);
+	// waiting_contributions stays active so we keep polling for quorum completion
+	const activeStatuses = new Set(['pending', 'stage_1', 'stage_2', 'stage_3', 'waiting_contributions']);
 
 	async function refreshCouncil() {
 		try {
@@ -81,6 +82,11 @@
 			if (content.startsWith('@close')) {
 				await closeCouncil(sessionId);
 				await refreshCouncil();
+			} else if (council?.status === 'waiting_contributions') {
+				// B3 — post as a human contribution; backend fires resume when quorum met
+				const token = (await import('$lib/api/client')).getToken();
+				const sub = token ? JSON.parse(atob(token.split('.')[1])).sub : 'user';
+				await contributeToCouncil(sessionId, `user:${sub}`, sub, content);
 			} else if (council?.status === 'closed') {
 				// Mode 3: chat with verdict — backend appends user_message + reflection
 				// events to the thread and publishes them via Centrifugo, so they appear
@@ -129,6 +135,8 @@
 		stage_2: 'Peer ranking',
 		stage_3: 'Synthesising verdict',
 		pending_approval: 'Pending approval',
+		waiting_contributions: 'Awaiting contributions',
+		scheduled: 'Scheduled',
 		closed: 'Closed',
 		failed: 'Failed'
 	};
@@ -158,6 +166,22 @@
 				</span>
 			</div>
 		</div>
+
+		{#if council.status === 'waiting_contributions'}
+			<div class="shrink-0 border-b border-violet-800/40 bg-violet-950/20 px-5 py-3">
+				<div class="flex items-center gap-2">
+					<svg class="h-4 w-4 shrink-0 text-violet-400 animate-pulse" fill="currentColor" viewBox="0 0 24 24">
+						<circle cx="12" cy="12" r="10"/>
+					</svg>
+					<p class="text-sm text-violet-300">Awaiting contributions</p>
+					{#if council.quorum != null}
+						<span class="ml-auto text-xs text-violet-400/70">
+							{council.contributions_received ?? 0} / {council.quorum} received
+						</span>
+					{/if}
+				</div>
+			</div>
+		{/if}
 
 		{#if council.status === 'pending_approval'}
 			<div class="shrink-0 border-b border-amber-800/40 bg-amber-950/20 px-5 py-4">

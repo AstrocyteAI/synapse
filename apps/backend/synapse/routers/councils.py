@@ -136,8 +136,26 @@ async def create_council(
     )
     await _publish(request, thread.id, thread_event_dict(started_event))
 
-    orchestrator = _get_orchestrator(request)
     context = build_context(user)
+
+    # B7 — Scheduled council: register with the runner and return immediately.
+    # The runner will fire the orchestrator at run_at.
+    if body.run_at:
+        request.app.state.scheduler.schedule(request.app, session_id, body.run_at)
+        return {
+            "session_id": str(session_id),
+            "thread_id": str(thread.id),
+            "status": CouncilStatus.scheduled,
+            "run_at": body.run_at.isoformat(),
+        }
+
+    # B3 — Schedule contribution_deadline resume if set
+    if body.contribution_deadline_hours and body.council_type == "async":
+        deadline = council_session.contribution_deadline
+        if deadline:
+            request.app.state.scheduler.schedule_resume(request.app, session_id, deadline)
+
+    orchestrator = _get_orchestrator(request)
 
     async def _run() -> None:
         async with request.app.state.sessionmaker() as bg_db:
@@ -552,4 +570,12 @@ def _session_detail(s) -> dict:
         "members": s.members,
         "chairman": s.chairman,
         "conflict_metadata": s.conflict_metadata,
+        # B3 — async councils
+        "quorum": s.quorum,
+        "contributions_received": len(s.contributions) if s.contributions else 0,
+        "contribution_deadline": (
+            s.contribution_deadline.isoformat() if s.contribution_deadline else None
+        ),
+        # B7 — scheduling
+        "run_at": s.run_at.isoformat() if s.run_at else None,
     }

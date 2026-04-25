@@ -39,6 +39,8 @@ class CouncilStatus(StrEnum):
     pending_approval = (
         "pending_approval"  # verdict ready, conflict detected — awaiting human review
     )
+    waiting_contributions = "waiting_contributions"  # B3: async council awaiting quorum
+    scheduled = "scheduled"  # B7: council scheduled for future run_at time
     closed = "closed"
     failed = "failed"
 
@@ -48,6 +50,8 @@ class CouncilType(StrEnum):
     agent = "agent"
     mixed = "mixed"
     solo = "solo"
+    async_ = "async"  # B3: members contribute on own schedule
+    red_team = "red_team"  # B5: adversarial attack mode
 
 
 class CouncilSession(Base):
@@ -73,6 +77,16 @@ class CouncilSession(Base):
 
     # Conflict detection (B6) — populated when a verdict contradicts a precedent
     conflict_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Async councils (B3) — contributions accumulate until quorum; then Stage 2+3 fires
+    contributions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    quorum: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    contribution_deadline: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Scheduling (B7) — deferred councils run at this UTC timestamp
+    run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Metadata
     topic_tag: Mapped[str | None] = mapped_column(String(128), nullable=True)

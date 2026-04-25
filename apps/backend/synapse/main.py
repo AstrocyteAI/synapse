@@ -13,7 +13,8 @@ from synapse.db.session import create_engine_and_sessionmaker
 from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
-from synapse.routers import centrifugo_router, councils, memory, templates, threads
+from synapse.routers import centrifugo_router, contributions, councils, memory, templates, threads
+from synapse.scheduling.runner import ScheduledCouncilRunner, restore_from_db
 
 
 @asynccontextmanager
@@ -40,8 +41,14 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.sessionmaker = sessionmaker
 
+    # B7 — scheduler: register before restore so fired tasks can use it
+    scheduler = ScheduledCouncilRunner()
+    app.state.scheduler = scheduler
+    await restore_from_db(app)
+
     yield
 
+    await scheduler.shutdown()
     await http_client.aclose()
     await engine.dispose()
 
@@ -63,6 +70,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(councils.router, prefix="/v1")
+    app.include_router(contributions.router, prefix="/v1")
     app.include_router(threads.router, prefix="/v1")
     app.include_router(centrifugo_router.router, prefix="/v1")
     app.include_router(templates.router, prefix="/v1")

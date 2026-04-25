@@ -23,6 +23,8 @@
 		stage_2: 'Ranking',
 		stage_3: 'Synthesising',
 		pending_approval: 'Pending approval',
+		waiting_contributions: 'Awaiting contributions',
+		scheduled: 'Scheduled',
 		closed: 'Closed',
 		failed: 'Failed'
 	};
@@ -33,6 +35,8 @@
 		stage_2: 'text-blue-300 bg-blue-900/40',
 		stage_3: 'text-blue-300 bg-blue-900/40',
 		pending_approval: 'text-amber-300 bg-amber-900/40',
+		waiting_contributions: 'text-violet-300 bg-violet-900/40',
+		scheduled: 'text-sky-300 bg-sky-900/40',
 		closed: 'text-green-300 bg-green-900/40',
 		failed: 'text-red-400 bg-red-900/30'
 	};

@@ -335,11 +335,11 @@ Python · FastAPI · Centrifugo
 |-------|-------------|
 | ✅ **B1 — Core engine** | Council engine (gather → rank → synthesise), Astrocyte gateway integration, REST + SSE endpoints, Centrifugo publish, OpenAPI schema |
 | ✅ **B2 — MCP server** | `start_council`, `join`, `contribute`, `recall_precedent`, `close` tools |
-| **B3 — Async councils** | Quorum-based async deliberation, cursor polling, timeout policy |
+| ✅ **B3 — Async councils** | `council_type="async"`, human/llm member types, quorum, `waiting_contributions` status, `POST /contribute`, deadline resume via scheduler |
 | ✅ **B4 — Templates** | Built-in templates (architecture-review, security-audit, code-review, red-team, product-decision, solo), template inheritance, `GET /v1/templates` |
 | ✅ **B5 — Deliberation quality** | Multi-round deliberation, convergence detection, red team mode |
 | ✅ **B6 — Workflows** | Conflict detection vs precedents, `pending_approval` status, approval/reject endpoints, `conflict_detected` thread events |
-| **B7 — Scheduling** | Scheduled, recurring (cron), and externally triggered councils |
+| ✅ **B7 — Scheduling** | `run_at` on `CreateCouncilRequest`, `scheduled` status, `ScheduledCouncilRunner` (asyncio tasks, DB recovery on startup), deadline enforcement for async councils |
 | **B8 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering |
 | **B9 — RBAC + Webhooks** | Full role model, API keys, outbound HMAC-signed webhooks, export integrations |
 | **B10 — Notifications** | Email notifications, weekly digest, per-user preferences |

@@ -49,6 +49,12 @@ export interface CouncilDetail extends CouncilSummary {
 	members: Record<string, unknown>[];
 	chairman: Record<string, unknown>;
 	conflict_metadata: Record<string, unknown> | null;
+	// B3 — async councils
+	quorum: number | null;
+	contributions_received: number;
+	contribution_deadline: string | null;
+	// B7 — scheduled councils
+	run_at: string | null;
 }
 
 export interface CreateCouncilResponse {
@@ -100,5 +106,7 @@ export type CouncilStatus =
 	| 'stage_2'
 	| 'stage_3'
 	| 'pending_approval'
+	| 'waiting_contributions'
+	| 'scheduled'
 	| 'closed'
 	| 'failed';

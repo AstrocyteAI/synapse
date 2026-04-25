@@ -32,7 +32,7 @@ from synapse.memory.banks import Banks, council_tags, verdict_tags
 from synapse.memory.context import AstrocyteContext
 
 if TYPE_CHECKING:
-    from synapse.memory.gateway_client import AstrocyteGatewayClient
+    from synapse.memory.gateway_client import AstrocyteGatewayClient, MemoryHit
     from synapse.realtime.centrifugo import CentrifugoClient
 
 _logger = logging.getLogger(__name__)
@@ -62,8 +62,11 @@ class CouncilOrchestrator:
         council_type: str = "llm",
         topic_tag: str | None = None,
         human_turns: list[str] | None = None,
-    ) -> CouncilResult:
+    ) -> CouncilResult | None:
         """Run the full council pipeline.
+
+        Returns None for async councils that park in ``waiting_contributions``
+        — they are resumed later via :meth:`resume` once quorum is met.
 
         Args:
             human_turns: Mode 2 messages injected by a human participant during
@@ -87,7 +90,7 @@ class CouncilOrchestrator:
 
         # --- Recall precedents ---
         await set_status(CouncilStatus.pending)
-        precedents = []
+        precedents: list[MemoryHit] = []
         try:
             precedents = await self._astrocyte.recall(
                 query=question,
@@ -103,6 +106,23 @@ class CouncilOrchestrator:
         # --- Stage 1: Gather ---
         await set_status(CouncilStatus.stage_1)
         await publish("stage_started", {"stage": 1})
+
+        # B3 — async councils: LLM members respond immediately; human members
+        # contribute later via POST /v1/councils/{id}/contribute.
+        if council_type == "async":
+            return await self._run_async_stage1(
+                session_id=session_id,
+                question=question,
+                members=members,
+                chairman=chairman,
+                precedents=precedents,
+                context=context,
+                db=db,
+                council_type=council_type,
+                topic_tag=topic_tag,
+                human_turns=human_turns or [],
+                publish=publish,
+            )
 
         stage1_responses = await run_gather(
             members=members,
@@ -215,21 +235,283 @@ class CouncilOrchestrator:
         # Use the latest (possibly revised) responses for ranking
         final_responses = current_responses
 
+        return await self._complete_council(
+            session_id=session_id,
+            question=question,
+            members=members,
+            chairman=chairman,
+            stage1_responses=final_responses,
+            precedents=precedents,
+            council_type=council_type,
+            topic_tag=topic_tag,
+            context=context,
+            db=db,
+            deliberation_rounds=deliberation_rounds,
+            human_turns=human_turns or [],
+            publish=publish,
+            set_status=set_status,
+        )
+
+    # ---------------------------------------------------------------------------
+    # B3 — Async stage 1 helper
+    # ---------------------------------------------------------------------------
+
+    async def _run_async_stage1(
+        self,
+        *,
+        session_id: uuid.UUID,
+        question: str,
+        members: list[CouncilMember],
+        chairman: CouncilMember,
+        precedents: list,
+        context: AstrocyteContext,
+        db: AsyncSession,
+        council_type: str,
+        topic_tag: str | None,
+        human_turns: list[str],
+        publish,
+    ) -> CouncilResult | None:
+        """Stage 1 for async councils.
+
+        LLM members respond immediately; human members contribute later via
+        ``POST /v1/councils/{id}/contribute``.  Returns the completed
+        ``CouncilResult`` if quorum is already met (all-LLM council), otherwise
+        parks the session in ``waiting_contributions`` and returns ``None``.
+        """
+        council_id = str(session_id)
+
+        async def set_status(status: str) -> None:
+            session = await db.get(CouncilSession, session_id)
+            if session:
+                session.status = status
+                await db.commit()
+
+        llm_members = [m for m in members if m.member_type == "llm"]
+        human_members = [m for m in members if m.member_type == "human"]
+
+        # Gather LLM member responses immediately
+        llm_responses: list[StageOneResponse] = []
+        if llm_members:
+            llm_responses = await run_gather(
+                members=llm_members,
+                question=question,
+                precedents=precedents,
+                llm=self._llm,
+                timeout=self._settings.stage1_timeout_seconds,
+            )
+
+        # Save LLM responses as contributions to the session
+        session = await db.get(CouncilSession, session_id)
+        if session:
+            new_contributions = [
+                {
+                    "member_id": r.member_id,
+                    "member_name": r.member_name,
+                    "content": r.content,
+                    "member_type": "llm",
+                    "submitted_at": datetime.now(UTC).isoformat(),
+                }
+                for r in llm_responses
+                if not r.error
+            ]
+            session.contributions = [*session.contributions, *new_contributions]
+            await db.commit()
+            await db.refresh(session)
+
+        await publish(
+            "stage1_partial",
+            {
+                "llm_responses": len(llm_responses),
+                "human_pending": len(human_members),
+            },
+        )
+
+        # Check if quorum already met (e.g. no human members)
+        session = await db.get(CouncilSession, session_id)
+        if session:
+            from synapse.council.session import quorum_met
+
+            if quorum_met(session):
+                _logger.info(
+                    "Council %s: quorum met immediately (%d contributions)",
+                    council_id,
+                    len(session.contributions),
+                )
+                return await self._complete_council(
+                    session_id=session_id,
+                    question=question,
+                    members=members,
+                    chairman=chairman,
+                    stage1_responses=llm_responses,
+                    precedents=precedents,
+                    council_type=council_type,
+                    topic_tag=topic_tag,
+                    context=context,
+                    db=db,
+                    deliberation_rounds=[],
+                    human_turns=human_turns,
+                    publish=publish,
+                    set_status=set_status,
+                )
+
+        # Quorum not yet met — park and wait for human contributions
+        await set_status(CouncilStatus.waiting_contributions)
+        effective_quorum = (session.quorum if session else None) or len(members)
+        await publish(
+            "waiting_contributions",
+            {
+                "session_id": council_id,
+                "quorum": effective_quorum,
+                "received": len(session.contributions) if session else len(llm_responses),
+                "deadline": (
+                    session.contribution_deadline.isoformat()
+                    if session and session.contribution_deadline
+                    else None
+                ),
+            },
+        )
+        _logger.info(
+            "Council %s waiting for contributions (%d/%d)",
+            council_id,
+            len(session.contributions) if session else 0,
+            effective_quorum,
+        )
+        return None
+
+    # ---------------------------------------------------------------------------
+    # B3 — Resume from waiting_contributions
+    # ---------------------------------------------------------------------------
+
+    async def resume(self, session_id: uuid.UUID, db: AsyncSession) -> CouncilResult | None:
+        """Resume an async council after quorum is met.
+
+        Loads contributions from the session, reconstructs members/chairman/context
+        from DB, re-recalls precedents, and runs Stage 2+3.  Called by:
+        - ``POST /v1/councils/{id}/contribute`` when quorum is detected
+        - The scheduler when ``contribution_deadline`` is reached (B7)
+        """
+        session = await db.get(CouncilSession, session_id)
+        if not session:
+            _logger.warning("resume: session %s not found", session_id)
+            return None
+        if session.status != CouncilStatus.waiting_contributions:
+            _logger.warning(
+                "resume: session %s has status %s, expected waiting_contributions",
+                session_id,
+                session.status,
+            )
+            return None
+
+        council_id = str(session_id)
+
+        async def publish(event_type: str, payload: dict) -> None:
+            try:
+                await self._centrifugo.publish_council_event(council_id, event_type, payload)
+            except Exception as e:
+                _logger.warning("Centrifugo publish failed (%s): %s", event_type, e)
+
+        async def set_status(status: str) -> None:
+            s = await db.get(CouncilSession, session_id)
+            if s:
+                s.status = status
+                await db.commit()
+
+        # Reconstruct from DB
+        members = [CouncilMember(**m) for m in session.members]
+        chairman = CouncilMember(**session.chairman)
+        context = AstrocyteContext(
+            principal=session.created_by,
+            tenant_id=session.tenant_id,
+        )
+
+        stage1_responses = [
+            StageOneResponse(
+                member_id=c["member_id"],
+                member_name=c["member_name"],
+                content=c["content"],
+            )
+            for c in session.contributions
+        ]
+
+        # Re-recall precedents (original ones were not persisted yet)
+        precedents: list = []
+        try:
+            precedents = await self._astrocyte.recall(
+                query=session.question,
+                bank_id=Banks.PRECEDENTS,
+                context=context,
+                max_results=self._settings.max_precedents,
+            )
+        except Exception as e:
+            _logger.warning("Precedent recall failed during resume: %s", e)
+
+        await publish(
+            "stage1_complete",
+            {
+                "responses": [
+                    {"member_id": r.member_id, "member_name": r.member_name, "content": r.content}
+                    for r in stage1_responses
+                ]
+            },
+        )
+
+        return await self._complete_council(
+            session_id=session_id,
+            question=session.question,
+            members=members,
+            chairman=chairman,
+            stage1_responses=stage1_responses,
+            precedents=precedents,
+            council_type=session.council_type,
+            topic_tag=session.topic_tag,
+            context=context,
+            db=db,
+            deliberation_rounds=[],
+            human_turns=[],
+            publish=publish,
+            set_status=set_status,
+        )
+
+    # ---------------------------------------------------------------------------
+    # Stage 2+3 core — shared by run() and resume()
+    # ---------------------------------------------------------------------------
+
+    async def _complete_council(
+        self,
+        *,
+        session_id: uuid.UUID,
+        question: str,
+        members: list[CouncilMember],
+        chairman: CouncilMember,
+        stage1_responses: list[StageOneResponse],
+        precedents: list,
+        council_type: str,
+        topic_tag: str | None,
+        context: AstrocyteContext,
+        db: AsyncSession,
+        deliberation_rounds: list,
+        human_turns: list[str],
+        publish,
+        set_status,
+    ) -> CouncilResult:
+        """Run Stage 2 (rank) + Stage 3 (synthesise) + conflict detection + persist."""
+        council_id = str(session_id)
+
         # --- Stage 2: Rank (skip for solo councils) ---
         await set_status(CouncilStatus.stage_2)
         await publish("stage_started", {"stage": 2})
 
-        if council_type == "solo" or len(final_responses) == 1:
+        if council_type == "solo" or len(stage1_responses) == 1:
             from synapse.council.models import MemberRanking, RankingResult
 
             label = "A"
-            label_map = {f"Response {label}": final_responses[0].member_id}
+            label_map = {f"Response {label}": stage1_responses[0].member_id}
             ranking_result = RankingResult(
                 label_map=label_map,
                 member_rankings=[
                     MemberRanking(
-                        member_id=final_responses[0].member_id,
-                        member_name=final_responses[0].member_name,
+                        member_id=stage1_responses[0].member_id,
+                        member_name=stage1_responses[0].member_name,
                         ranking=[f"Response {label}"],
                         raw_response="",
                     )
@@ -240,7 +522,7 @@ class CouncilOrchestrator:
         else:
             ranking_result = await run_rank(
                 members=members,
-                stage1_responses=final_responses,
+                stage1_responses=stage1_responses,
                 llm=self._llm,
                 timeout=self._settings.stage2_timeout_seconds,
             )
@@ -261,7 +543,7 @@ class CouncilOrchestrator:
 
         synthesis = await run_synthesise(
             chairman=chairman,
-            stage1_responses=final_responses,
+            stage1_responses=stage1_responses,
             ranking_result=ranking_result,
             question=question,
             llm=self._llm,
@@ -350,7 +632,7 @@ class CouncilOrchestrator:
                 council_id=session_id,
                 round_number=len(deliberation_rounds) + 1,
                 precedents=[{"content": p.content, "score": p.score} for p in precedents],
-                stage1_responses=[r.model_dump() for r in final_responses],
+                stage1_responses=[r.model_dump() for r in stage1_responses],
                 stage2_rankings=[r.model_dump() for r in ranking_result.member_rankings],
                 aggregate_scores=ranking_result.aggregate_scores,
                 stage3_verdict={
@@ -367,13 +649,13 @@ class CouncilOrchestrator:
             self._retain_to_astrocyte(
                 session_id=council_id,
                 question=question,
-                stage1_responses=final_responses,
+                stage1_responses=stage1_responses,
                 synthesis=synthesis,
                 consensus_score=ranking_result.consensus_score,
                 council_type=council_type,
                 topic_tag=topic_tag,
                 context=context,
-                human_turns=human_turns or [],
+                human_turns=human_turns,
             )
         )
 
@@ -388,14 +670,14 @@ class CouncilOrchestrator:
                 },
             )
 
-        result = CouncilResult(
+        return CouncilResult(
             session_id=session_id,
             question=question,
             verdict=synthesis.verdict,
             consensus_score=ranking_result.consensus_score,
             confidence_label=synthesis.confidence_label,
             dissent_detected=dissent_detected,
-            stage1_responses=final_responses,
+            stage1_responses=stage1_responses,
             ranking_result=ranking_result,
             synthesis=synthesis,
             deliberation_rounds=[
@@ -412,7 +694,6 @@ class CouncilOrchestrator:
                 for rd in deliberation_rounds
             ],
         )
-        return result
 
     def _detect_dissent(self, ranking_result) -> bool:
         """Flag dissent when any member's ranking significantly diverges from consensus."""
@@ -461,7 +742,11 @@ class CouncilOrchestrator:
             )
 
             # Concise verdict → decisions bank
-            verdict_summary = f"Q: {question}\n\nVerdict: {synthesis.verdict}\nConfidence: {synthesis.confidence_label}"
+            verdict_summary = (
+                f"Q: {question}\n\n"
+                f"Verdict: {synthesis.verdict}\n"
+                f"Confidence: {synthesis.confidence_label}"
+            )
             await self._astrocyte.retain(
                 content=verdict_summary,
                 bank_id=Banks.DECISIONS,

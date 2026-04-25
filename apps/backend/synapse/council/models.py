@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,7 @@ class CouncilMember(BaseModel):
     name: str = ""  # derived from model_id if empty
     role: str = ""  # injected into system prompt
     system_prompt_override: str = ""  # replaces default system prompt if set
+    member_type: Literal["llm", "human"] = "llm"  # B3: human members contribute via API
 
 
 class CreateCouncilRequest(BaseModel):
@@ -23,6 +25,19 @@ class CreateCouncilRequest(BaseModel):
     template_id: str | None = None
     topic_tag: str | None = None
     config: dict[str, Any] = Field(default_factory=dict)
+    # B3 — async councils
+    quorum: int | None = None  # min contributions before Stage 2 fires; None = all members
+    contribution_deadline_hours: float | None = None  # forced resume after N hours
+    # B7 — scheduled councils
+    run_at: datetime | None = None  # UTC timestamp to start; None = immediate
+
+
+class ContributeRequest(BaseModel):
+    """Body for POST /v1/councils/{id}/contribute (B3)."""
+
+    member_id: str  # identifies the human participant (e.g. "user:alice")
+    member_name: str
+    content: str
 
 
 class StageOneResponse(BaseModel):
