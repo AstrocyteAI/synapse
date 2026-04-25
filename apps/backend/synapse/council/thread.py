@@ -1,4 +1,4 @@
-"""Thread CRUD helpers — create threads, append events, query history."""
+"""Thread CRUD helpers — create threads, append events, query history, serialise events."""
 
 from __future__ import annotations
 
@@ -106,3 +106,17 @@ async def get_history(
     stmt = stmt.limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+def thread_event_dict(event: ThreadEvent) -> dict:
+    """Canonical wire representation — used by both REST responses and Centrifugo payloads."""
+    return {
+        "id": event.id,
+        "thread_id": str(event.thread_id),
+        "event_type": event.event_type,
+        "actor_id": event.actor_id,
+        "actor_name": event.actor_name,
+        "content": event.content,
+        "metadata": event.event_metadata,
+        "created_at": event.created_at.isoformat(),
+    }

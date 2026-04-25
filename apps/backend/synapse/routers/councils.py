@@ -24,6 +24,7 @@ from synapse.council.thread import (
     append_event,
     create_thread,
     get_thread_by_council,
+    thread_event_dict,
 )
 from synapse.db.models import CouncilStatus, ThreadEventType
 from synapse.db.session import get_session as get_db_session
@@ -109,7 +110,7 @@ async def create_council(
     )
 
     # Append the council_started event so the thread has a clear origin marker
-    await append_event(
+    started_event = await append_event(
         db,
         thread_id=thread.id,
         event_type=ThreadEventType.council_started,
@@ -120,6 +121,7 @@ async def create_council(
             "member_count": len(members),
         },
     )
+    await _publish(request, thread.id, thread_event_dict(started_event))
 
     orchestrator = _get_orchestrator(request)
     context = build_context(user)
@@ -270,7 +272,7 @@ async def chat_with_verdict(
     # Append the user message and reflection to the thread
     thread = await get_thread_by_council(db, session_id)
     if thread:
-        await append_event(
+        user_event = await append_event(
             db,
             thread_id=thread.id,
             event_type=ThreadEventType.user_message,
@@ -278,7 +280,9 @@ async def chat_with_verdict(
             actor_name=user.raw_claims.get("name") or user.sub,
             content=body.message,
         )
-        await append_event(
+        await _publish(request, thread.id, thread_event_dict(user_event))
+
+        reflection_event = await append_event(
             db,
             thread_id=thread.id,
             event_type=ThreadEventType.reflection,
@@ -286,6 +290,7 @@ async def chat_with_verdict(
             content=reflect_result.answer,
             metadata={"sources": reflect_result.sources},
         )
+        await _publish(request, thread.id, thread_event_dict(reflection_event))
 
     # Retain the Q&A exchange to the councils bank so future councils can recall it
     asyncio.create_task(
@@ -364,6 +369,14 @@ async def stream_council(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+async def _publish(request: Request, thread_id: uuid.UUID, payload: dict) -> None:
+    """Best-effort Centrifugo publish — never raises (DB write already succeeded)."""
+    try:
+        await request.app.state.centrifugo.publish(f"thread:{thread_id}", payload)
+    except Exception:
+        _logger.warning("Centrifugo publish failed for thread %s", thread_id, exc_info=True)
 
 
 async def _retain_reflection(

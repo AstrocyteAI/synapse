@@ -70,6 +70,19 @@ def headers(token):
 # ---------------------------------------------------------------------------
 
 
+def _make_thread_event(id: int = 1, thread_id: uuid.UUID | None = None) -> MagicMock:
+    e = MagicMock()
+    e.id = id
+    e.thread_id = thread_id or uuid.uuid4()
+    e.event_type = "council_started"
+    e.actor_id = "system"
+    e.actor_name = ""
+    e.content = None
+    e.event_metadata = {}
+    e.created_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
+    return e
+
+
 def _make_council_session(**kwargs) -> CouncilSession:
     defaults = dict(
         id=uuid.uuid4(),
@@ -104,15 +117,19 @@ def _make_council_session(**kwargs) -> CouncilSession:
 
 def test_create_council_returns_202(client, db_session, headers):
     session_id = uuid.uuid4()
+    thread_id = uuid.uuid4()
     mock_cs = _make_council_session(id=session_id, status=CouncilStatus.pending)
-    db_session.get = AsyncMock(return_value=mock_cs)
-    db_session.commit = AsyncMock()
-    db_session.refresh = AsyncMock()
-    db_session.add = MagicMock()
+    mock_thread = MagicMock()
+    mock_thread.id = thread_id
 
     with (
         patch("synapse.routers.councils.asyncio.create_task"),
         patch("synapse.council.session.create_session", new=AsyncMock(return_value=mock_cs)),
+        patch("synapse.routers.councils.create_thread", new=AsyncMock(return_value=mock_thread)),
+        patch(
+            "synapse.routers.councils.append_event",
+            new=AsyncMock(return_value=_make_thread_event(thread_id=thread_id)),
+        ),
     ):
         resp = client.post(
             "/v1/councils",
@@ -123,6 +140,7 @@ def test_create_council_returns_202(client, db_session, headers):
     assert resp.status_code == 202
     body = resp.json()
     assert "session_id" in body
+    assert "thread_id" in body
     assert body["status"] == CouncilStatus.pending
 
 

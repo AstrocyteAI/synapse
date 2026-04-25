@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
-from synapse.council.thread import append_event, get_history, get_thread
+from synapse.council.thread import append_event, get_history, get_thread, thread_event_dict
 from synapse.db.models import ThreadEventType
 from synapse.db.session import get_session as get_db_session
 
@@ -53,7 +53,10 @@ async def send_message(
         actor_name=_display_name(user),
         content=body.content,
     )
-    return _event_dict(event)
+
+    payload = thread_event_dict(event)
+    await _publish(request, thread_id, payload)
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +93,7 @@ async def list_events(
         limit=limit,
     )
 
-    items = [_event_dict(e) for e in events]
+    items = [thread_event_dict(e) for e in events]
     return {
         "thread_id": str(thread_id),
         "events": items,
@@ -117,14 +120,9 @@ def _display_name(user: AuthenticatedUser) -> str:
     return user.raw_claims.get("name") or user.raw_claims.get("preferred_username") or user.sub
 
 
-def _event_dict(event) -> dict:
-    return {
-        "id": event.id,
-        "thread_id": str(event.thread_id),
-        "event_type": event.event_type,
-        "actor_id": event.actor_id,
-        "actor_name": event.actor_name,
-        "content": event.content,
-        "metadata": event.event_metadata,
-        "created_at": event.created_at.isoformat(),
-    }
+async def _publish(request: Request, thread_id: uuid.UUID, payload: dict) -> None:
+    """Best-effort Centrifugo publish — never raises (DB write already succeeded)."""
+    try:
+        await request.app.state.centrifugo.publish(f"thread:{thread_id}", payload)
+    except Exception:
+        _logger.warning("Centrifugo publish failed for thread %s", thread_id, exc_info=True)
