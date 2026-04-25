@@ -15,7 +15,6 @@ from synapse.council.stages.gather import (
 )
 from synapse.memory.gateway_client import MemoryHit
 
-
 # ---------------------------------------------------------------------------
 # _format_precedents
 # ---------------------------------------------------------------------------

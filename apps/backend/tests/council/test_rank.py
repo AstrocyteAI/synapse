@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from synapse.council.models import CouncilMember, MemberRanking, StageOneResponse
+from synapse.council.models import MemberRanking, StageOneResponse
 from synapse.council.stages.rank import (
     _anonymise,
     _compute_aggregate_scores,
@@ -14,7 +14,6 @@ from synapse.council.stages.rank import (
     _parse_ranking,
     run_rank,
 )
-
 
 # ---------------------------------------------------------------------------
 # _anonymise

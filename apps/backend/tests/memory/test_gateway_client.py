@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import pytest
 import respx
-from httpx import AsyncClient, Response
+from httpx import AsyncClient, HTTPStatusError
 
 from synapse.memory.context import AstrocyteContext
 from synapse.memory.gateway_client import AstrocyteGatewayClient
-
 
 BASE_URL = "http://astrocyte-mock"
 API_KEY = "test-api-key"
@@ -96,7 +95,7 @@ async def test_retain_raises_on_http_error():
         with respx.mock(base_url=BASE_URL) as mock:
             mock.post("/v1/retain").respond(500, json={"detail": "internal error"})
 
-            with pytest.raises(Exception):
+            with pytest.raises(HTTPStatusError):
                 await gw.retain(
                     content="data",
                     bank_id="councils",

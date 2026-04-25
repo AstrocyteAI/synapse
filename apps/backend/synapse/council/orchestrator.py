@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +15,7 @@ from synapse.council.stages.gather import run_gather
 from synapse.council.stages.rank import run_rank
 from synapse.council.stages.synthesise import run_synthesise
 from synapse.db.models import CouncilSession, CouncilStatus, CouncilTranscript
-from synapse.llm.client import LLMClient, derive_display_name
+from synapse.llm.client import LLMClient
 from synapse.memory.banks import Banks, council_tags, verdict_tags
 from synapse.memory.context import AstrocyteContext
 
@@ -167,7 +166,7 @@ class CouncilOrchestrator:
             session.consensus_score = ranking_result.consensus_score
             session.confidence_label = synthesis.confidence_label
             session.dissent_detected = dissent_detected
-            session.closed_at = datetime.now(timezone.utc)
+            session.closed_at = datetime.now(UTC)
 
             transcript = CouncilTranscript(
                 council_id=session_id,

@@ -13,7 +13,6 @@ import pytest
 
 from synapse.memory.banks import Banks
 
-
 pytestmark = pytest.mark.integration
 
 

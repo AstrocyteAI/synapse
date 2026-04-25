@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,7 +75,7 @@ async def mark_failed(
     session = await db.get(CouncilSession, session_id)
     if session:
         session.status = CouncilStatus.failed
-        session.closed_at = datetime.now(timezone.utc)
+        session.closed_at = datetime.now(UTC)
         if error:
             session.config = {**session.config, "_error": error}
         await db.commit()

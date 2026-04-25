@@ -12,7 +12,7 @@ from synapse.config import get_settings
 from synapse.db.session import create_engine_and_sessionmaker
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
-from synapse.routers import councils, centrifugo_router, threads
+from synapse.routers import centrifugo_router, councils, threads
 
 
 @asynccontextmanager
@@ -46,8 +46,6 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    settings = get_settings()
-
     app = FastAPI(
         title="Synapse",
         description="Multi-agent deliberation API",

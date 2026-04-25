@@ -77,7 +77,7 @@ async def _query_member(
             timeout=timeout,
         )
         return StageOneResponse(member_id=member.model_id, member_name=name, content=content)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         _logger.warning("Member %s timed out in Stage 1", member.model_id)
         return StageOneResponse(
             member_id=member.model_id, member_name=name, content="", error="timeout"

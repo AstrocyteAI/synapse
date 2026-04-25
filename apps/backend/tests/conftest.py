@@ -2,22 +2,15 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import jwt
 import pytest
-import pytest_asyncio
-from fastapi.testclient import TestClient
-from httpx import AsyncClient, Response
 
-from synapse.auth.jwt import AuthenticatedUser
 from synapse.config import Settings, get_settings
 from synapse.council.models import CouncilMember, MemberRanking, RankingResult, StageOneResponse
-from synapse.main import create_app
 from synapse.memory.gateway_client import MemoryHit
-
 
 # ---------------------------------------------------------------------------
 # Settings override — point at test doubles, never a real DB

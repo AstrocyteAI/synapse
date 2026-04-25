@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Pre-commit: ruff lint check for the Python backend.
+# Install once with: git config core.hooksPath .githooks
+
+set -euo pipefail
+
+BACKEND="apps/backend"
+
+# Only run if there are staged Python files in the backend.
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep "^${BACKEND}/.*\.py$" || true)
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+echo "→ ruff check..."
+cd "$BACKEND"
+uv run --with ruff ruff check synapse tests

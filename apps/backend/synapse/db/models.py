@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from enum import Enum as PyEnum
+from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Any
 
 from sqlalchemy import (
@@ -24,14 +24,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class CouncilStatus(str, PyEnum):
+class CouncilStatus(StrEnum):
     pending = "pending"
     stage_1 = "stage_1"
     stage_2 = "stage_2"
@@ -40,7 +40,7 @@ class CouncilStatus(str, PyEnum):
     failed = "failed"
 
 
-class CouncilType(str, PyEnum):
+class CouncilType(StrEnum):
     llm = "llm"
     agent = "agent"
     mixed = "mixed"
@@ -109,7 +109,7 @@ class CouncilTranscript(Base):
 # Thread storage — append-only chat event log
 # ---------------------------------------------------------------------------
 
-class ThreadEventType(str, PyEnum):
+class ThreadEventType(StrEnum):
     user_message     = "user_message"
     council_started  = "council_started"
     stage_progress   = "stage_progress"

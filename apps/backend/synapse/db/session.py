@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
-from synapse.db.models import Base
-
 
 def create_engine_and_sessionmaker(
     database_url: str,

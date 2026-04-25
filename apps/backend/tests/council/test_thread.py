@@ -11,11 +11,8 @@ from synapse.council.thread import (
     append_event,
     create_thread,
     get_history,
-    get_thread,
-    get_thread_by_council,
 )
 from synapse.db.models import Thread, ThreadEvent, ThreadEventType
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -65,7 +62,7 @@ async def test_create_thread_with_council():
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
 
-    thread = await create_thread(
+    await create_thread(
         db,
         council_id=council_id,
         created_by="user:abc",
@@ -157,7 +154,6 @@ async def test_get_history_before_id_orders_desc():
 
     await get_history(db, thread_id, before_id=100)
 
-    stmt = db.execute.call_args[0][0]
     # Verify the statement was constructed (we can't introspect SA deeply,
     # but at minimum it should not raise and should call execute)
     db.execute.assert_called_once()

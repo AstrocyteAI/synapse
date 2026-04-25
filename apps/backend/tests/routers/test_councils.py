@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +13,6 @@ from synapse.config import get_settings
 from synapse.db.models import CouncilSession, CouncilStatus
 from synapse.main import create_app
 from tests.conftest import TEST_SETTINGS, make_jwt
-
 
 # ---------------------------------------------------------------------------
 # App fixture with fully mocked infrastructure
@@ -85,8 +84,8 @@ def _make_council_session(**kwargs) -> CouncilSession:
         template_id=None,
         created_by="user:user-1",
         tenant_id="tenant-test",
-        created_at=datetime.now(timezone.utc),
-        closed_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
+        closed_at=datetime.now(UTC),
     )
     defaults.update(kwargs)
     obj = MagicMock(spec=CouncilSession)
@@ -107,8 +106,10 @@ def test_create_council_returns_202(client, db_session, headers):
     db_session.refresh = AsyncMock()
     db_session.add = MagicMock()
 
-    with patch("synapse.routers.councils.asyncio.create_task"):
-        with patch("synapse.council.session.create_session", new=AsyncMock(return_value=mock_cs)):
+    with (
+        patch("synapse.routers.councils.asyncio.create_task"),
+        patch("synapse.council.session.create_session", new=AsyncMock(return_value=mock_cs)),
+    ):
             resp = client.post(
                 "/v1/councils",
                 json={"question": "What should we prioritise?"},

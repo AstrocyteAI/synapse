@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -13,7 +13,6 @@ from synapse.config import get_settings
 from synapse.db.models import ThreadEventType
 from synapse.main import create_app
 from tests.conftest import TEST_SETTINGS, make_jwt
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,7 +45,7 @@ def _make_event(
     e.actor_name = actor_name
     e.content = content
     e.metadata = metadata or {}
-    e.created_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    e.created_at = datetime(2026, 1, 1, 12, 0, 0, tzinfo=UTC)
     return e
 
 

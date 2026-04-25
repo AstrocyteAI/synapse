@@ -38,11 +38,11 @@ def _anonymise(responses: list[StageOneResponse]) -> tuple[list[dict], dict[str,
     labels = [chr(65 + i) for i in range(len(responses))]
     anonymised = [
         {"label": f"Response {label}", "content": resp.content}
-        for label, resp in zip(labels, responses)
+        for label, resp in zip(labels, responses, strict=True)
     ]
     label_map = {
         f"Response {label}": resp.member_id
-        for label, resp in zip(labels, responses)
+        for label, resp in zip(labels, responses, strict=True)
     }
     return anonymised, label_map
 
@@ -85,8 +85,8 @@ def _compute_aggregate_scores(
     Compute mean rank position per response label.
     Lower score = higher ranked (rank 1 is best).
     """
-    rank_sums: dict[str, float] = {f"Response {l}": 0.0 for l in labels}
-    count: dict[str, int] = {f"Response {l}": 0 for l in labels}
+    rank_sums: dict[str, float] = {f"Response {lbl}": 0.0 for lbl in labels}
+    count: dict[str, int] = {f"Response {lbl}": 0 for lbl in labels}
 
     for mr in member_rankings:
         for position, label in enumerate(mr.ranking, start=1):
@@ -112,7 +112,7 @@ def _compute_kendalls_w(member_rankings: list[MemberRanking], labels: list[str])
         return 1.0             # trivial case
 
     # Rank sums for each label across all raters
-    rank_sums: dict[str, float] = {f"Response {l}": 0.0 for l in labels}
+    rank_sums: dict[str, float] = {f"Response {lbl}": 0.0 for lbl in labels}
     for mr in member_rankings:
         for position, label in enumerate(mr.ranking, start=1):
             if label in rank_sums:
@@ -192,7 +192,7 @@ async def run_rank(
             MemberRanking(
                 member_id="fallback",
                 member_name="Fallback",
-                ranking=[f"Response {l}" for l in labels],
+                ranking=[f"Response {lbl}" for lbl in labels],
                 raw_response="",
             )
         ]

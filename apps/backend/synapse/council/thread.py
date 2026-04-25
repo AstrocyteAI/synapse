@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from synapse.db.models import Thread, ThreadEvent, ThreadEventType
+from synapse.db.models import Thread, ThreadEvent
 
 
 async def create_thread(

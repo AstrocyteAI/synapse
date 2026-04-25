@@ -7,7 +7,12 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from synapse.council.models import CouncilMember, RankingResult, StageOneResponse, SynthesisResult
+    from synapse.council.models import (
+        CouncilMember,
+        RankingResult,
+        StageOneResponse,
+        SynthesisResult,
+    )
     from synapse.llm.client import LLMClient
 
 _logger = logging.getLogger(__name__)
@@ -44,13 +49,13 @@ def _rank_responses_for_chairman(
     # Sort labels by aggregate score (lower = better rank)
     sorted_labels = sorted(
         ranking_result.aggregate_scores.keys(),
-        key=lambda l: ranking_result.aggregate_scores[l],
+        key=lambda lbl: ranking_result.aggregate_scores[lbl],
     )
 
     # Map label -> response content
     label_to_content: dict[str, str] = {}
     labels = [chr(65 + i) for i in range(len(stage1_responses))]
-    for label, resp in zip(labels, stage1_responses):
+    for label, resp in zip(labels, stage1_responses, strict=True):
         label_to_content[f"Response {label}"] = resp.content
 
     parts = []
@@ -93,6 +98,7 @@ async def run_synthesise(
 ) -> SynthesisResult:
     """Chairman synthesises final verdict from Stage 1 responses and Stage 2 rankings."""
     import asyncio
+
     from synapse.council.models import SynthesisResult
 
     ranked_responses = _rank_responses_for_chairman(stage1_responses, ranking_result)
