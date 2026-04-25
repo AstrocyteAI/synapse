@@ -56,7 +56,7 @@ async def test_recall_returns_memory_hits():
             {"memory_id": "h2", "content": "Prior decision about Y.", "score": 0.81, "bank_id": "precedents", "tags": [], "metadata": {}},
         ]
         with respx.mock(base_url=BASE_URL) as mock:
-            mock.post("/v1/recall").respond(200, json={"hits": hits_payload})
+            mock.post("/v1/recall").respond(200, json={"memories": hits_payload})
 
             hits = await gw.recall(
                 query="What about X?",
@@ -77,7 +77,7 @@ async def test_recall_returns_empty_on_no_hits():
         gw = AstrocyteGatewayClient(base_url=BASE_URL, api_key=API_KEY, http_client=http)
 
         with respx.mock(base_url=BASE_URL) as mock:
-            mock.post("/v1/recall").respond(200, json={"hits": []})
+            mock.post("/v1/recall").respond(200, json={"memories": []})
 
             hits = await gw.recall(
                 query="obscure query",
@@ -112,7 +112,7 @@ async def test_recall_payload_includes_bank_and_context():
         gw = AstrocyteGatewayClient(base_url=BASE_URL, api_key=API_KEY, http_client=http)
 
         with respx.mock(base_url=BASE_URL) as mock:
-            mock.post("/v1/recall").respond(200, json={"hits": []})
+            mock.post("/v1/recall").respond(200, json={"memories": []})
 
             await gw.recall(
                 query="question",

@@ -83,18 +83,18 @@ services:
   # Astrocyte gateway — memory backend
   # ---------------------------------------------------------------------------
   astrocyte-gateway:
-    build:
-      context: ../astrocyte/astrocyte-services-py
-      dockerfile: astrocyte-gateway-py/Dockerfile
+    image: ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py:latest
     ports:
       - "8080:8080"
     environment:
-      ASTROCYTE_VECTOR_STORE: pgvector
       ASTROCYTE_HOST: 0.0.0.0
       ASTROCYTE_PORT: 8080
       ASTROCYTE_AUTH_MODE: api_key
       ASTROCYTE_API_KEY: ${ASTROCYTE_TOKEN:-dev-astrocyte-api-key}
-      DATABASE_URL: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      ASTROCYTE_VECTOR_STORE: pgvector
+      ASTROCYTE_PG_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      ASTROCYTE_GRAPH_STORE: age
+      ASTROCYTE_AGE_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
       ASTROCYTE_CONFIG_PATH: /config/astrocyte.yaml
     volumes:
       - ./apps/backend/astrocyte.yaml:/config/astrocyte.yaml:ro
@@ -109,10 +109,12 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
-  # Astrocyte PostgreSQL (pgvector)
+  # Astrocyte PostgreSQL (pgvector + Apache AGE)
   # ---------------------------------------------------------------------------
   astrocyte-postgres:
-    image: pgvector/pgvector:pg16
+    build:
+      context: docker/astrocyte-postgres
+      dockerfile: Dockerfile
     environment:
       POSTGRES_USER: astrocyte
       POSTGRES_PASSWORD: astrocyte

@@ -1,0 +1,96 @@
+name: Integration CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/backend/**"
+      - "docker/**"
+      - "docker-compose.yml"
+      - ".github/workflows/integration-ci.yml"
+  pull_request:
+    paths:
+      - "apps/backend/**"
+      - "docker/**"
+      - "docker-compose.yml"
+      - ".github/workflows/integration-ci.yml"
+
+jobs:
+  integration:
+    name: Integration tests (live Astrocyte gateway)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout synapse
+        uses: actions/checkout@v4
+
+      - name: Build astrocyte-postgres image (pgvector + AGE)
+        run: docker build --tag synapse/astrocyte-postgres:ci docker/astrocyte-postgres/
+
+      - name: Start backing services
+        run: |
+          docker compose up -d postgres astrocyte-postgres astrocyte-gateway
+        env:
+          ASTROCYTE_TOKEN: dev-astrocyte-api-key
+
+      - name: Wait for Postgres (synapse)
+        run: |
+          until docker compose ps postgres | grep -q "healthy"; do
+            echo "  waiting for synapse postgres..."; sleep 2
+          done
+
+      - name: Wait for Postgres (astrocyte)
+        run: |
+          until docker compose ps astrocyte-postgres | grep -q "healthy"; do
+            echo "  waiting for astrocyte postgres..."; sleep 2
+          done
+
+      - name: Wait for Astrocyte gateway
+        run: |
+          until curl -sf http://localhost:8080/live; do
+            echo "  gateway not ready, retrying..."; sleep 3
+          done
+          echo "Gateway is live."
+
+      - name: Astrocyte gateway readiness check
+        run: |
+          until curl -sf http://localhost:8080/health; do
+            echo "  gateway not ready (readiness), retrying..."; sleep 3
+          done
+          echo "Gateway is ready."
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        working-directory: apps/backend
+        run: uv sync --extra dev
+
+      - name: Run Alembic migrations (synapse DB)
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://synapse:synapse@localhost:5432/synapse
+        run: uv run alembic upgrade head
+
+      - name: Run integration tests
+        working-directory: apps/backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://synapse:synapse@localhost:5432/synapse
+          ASTROCYTE_GATEWAY_URL: http://localhost:8080
+          ASTROCYTE_TOKEN: dev-astrocyte-api-key
+        run: uv run pytest -m integration --integration -v
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: docker compose logs astrocyte-gateway astrocyte-postgres
+
+      - name: Tear down services
+        if: always()
+        run: docker compose down -v

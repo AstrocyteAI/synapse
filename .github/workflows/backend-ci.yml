@@ -1,0 +1,110 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - "apps/backend/**"
+      - "docker/**"
+      - ".github/workflows/backend-ci.yml"
+  pull_request:
+    paths:
+      - "apps/backend/**"
+      - "docker/**"
+      - ".github/workflows/backend-ci.yml"
+
+defaults:
+  run:
+    working-directory: apps/backend
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff check
+        run: uv run ruff check synapse tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check synapse tests
+
+  test:
+    name: Test (pytest)
+    runs-on: ubuntu-latest
+
+    services:
+      # Synapse application database — pgvector only
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: synapse
+          POSTGRES_PASSWORD: synapse
+          POSTGRES_DB: synapse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # Astrocyte gateway is mocked in unit tests (respx). Full integration
+    # tests against a real Astrocyte gateway run in the integration-ci job
+    # below using docker compose (requires pgvector + AGE custom image).
+    env:
+      DATABASE_URL: postgresql+asyncpg://synapse:synapse@localhost:5432/synapse_test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: uv sync --extra dev
+
+      - name: Run migrations
+        run: uv run alembic upgrade head
+
+      - name: Run tests
+        run: uv run pytest --cov=synapse --cov-report=term-missing --cov-report=xml -q
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: apps/backend/coverage.xml
+          retention-days: 7
+
+  docker-build:
+    name: Build astrocyte-postgres image (pgvector + AGE)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build custom astrocyte-postgres image
+        run: docker build --tag synapse/astrocyte-postgres:ci docker/astrocyte-postgres/

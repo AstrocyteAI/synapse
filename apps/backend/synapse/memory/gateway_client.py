@@ -108,7 +108,7 @@ class AstrocyteGatewayClient:
         data = resp.json()
 
         hits = []
-        for h in data.get("hits", []):
+        for h in data.get("memories", []):
             hits.append(
                 MemoryHit(
                     memory_id=h.get("memory_id", ""),
