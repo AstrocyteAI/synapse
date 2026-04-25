@@ -333,10 +333,10 @@ Python · FastAPI · Centrifugo
 
 | Phase | Deliverable |
 |-------|-------------|
-| **B1 — Core engine** | Council engine (gather → rank → synthesise), Astrocyte gateway integration, REST + SSE endpoints, Centrifugo publish, OpenAPI schema |
-| **B2 — MCP server** | `start_council`, `join`, `contribute`, `recall_precedent`, `close` tools |
+| ✅ **B1 — Core engine** | Council engine (gather → rank → synthesise), Astrocyte gateway integration, REST + SSE endpoints, Centrifugo publish, OpenAPI schema |
+| ✅ **B2 — MCP server** | `start_council`, `join`, `contribute`, `recall_precedent`, `close` tools |
 | **B3 — Async councils** | Quorum-based async deliberation, cursor polling, timeout policy |
-| **B4 — Templates** | Built-in templates, custom templates, template inheritance |
+| ✅ **B4 — Templates** | Built-in templates (architecture-review, security-audit, code-review, red-team, product-decision, solo), template inheritance, `GET /v1/templates` |
 | **B5 — Deliberation quality** | Multi-round deliberation, convergence detection, red team mode |
 | **B6 — Workflows** | Conflict detection, approval chains, council chains, auto-promotion, demotion |
 | **B7 — Scheduling** | Scheduled, recurring (cron), and externally triggered councils |
@@ -353,8 +353,8 @@ Svelte + SvelteKit · targets the OpenAPI contract
 
 | Phase | Deliverable |
 |-------|-------------|
-| **W1 — Core** | Chat entry point (Mode 1), council list, stage streaming via Centrifugo, verdict display |
-| **W2 — Human-in-the-loop** | Mode 2 participation, directives (`@redirect`, `@veto`, `@add`, `@close`), summon agent UI |
+| ✅ **W1 — Core** | Chat entry point (Mode 1), council list, stage streaming via Centrifugo, verdict display |
+| ✅ **W2 — Human-in-the-loop** | Mode 2 participation, directives (`@redirect`, `@veto`, `@add`, `@close`), `DirectivePicker` autocomplete |
 | **W3 — Mode 3 chat** | Chat with closed verdict, related precedents surfaced |
 | **W4 — Memory explorer** | Search and browse Astrocyte banks |
 | **W5 — Templates + Scheduling** | Template picker, schedule builder, triggered council UI |
@@ -400,10 +400,10 @@ Tracks are independent but some phases have natural synchronisation points:
 
 | Sync point | Backend | Frontend |
 |------------|---------|----------|
-| API contract available | B1 complete | W1, F1, I1 can start |
-| MCP tools available | B2 complete | Agent integrations can use `start_council` |
-| Human-in-the-loop API | B1 (directives in B1) | W2, F2 can ship |
-| Templates API | B4 complete | W5 template picker can ship |
+| ✅ API contract available | B1 ✅ | W1 ✅, F1, I1 can start |
+| ✅ MCP tools available | B2 ✅ | Agent integrations can use `start_council` |
+| ✅ Human-in-the-loop API | B1 ✅ | W2 ✅ |
+| ✅ Templates API | B4 ✅ | W5 template picker can ship |
 | Workflows API | B6 complete | W6 approval UI can ship |
 | Analytics API | B8 complete | W7 dashboard can ship |
 | Full RBAC + webhooks | B9 complete | W8 admin panel can ship |
