@@ -8,10 +8,12 @@ from enum import Enum as PyEnum
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Float,
     ForeignKey,
+    Identity,
     Integer,
     String,
     Text,
@@ -101,3 +103,89 @@ class CouncilTranscript(Base):
     stage3_verdict: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     session: Mapped[CouncilSession] = relationship("CouncilSession", back_populates="transcript")
+
+
+# ---------------------------------------------------------------------------
+# Thread storage — append-only chat event log
+# ---------------------------------------------------------------------------
+
+class ThreadEventType(str, PyEnum):
+    user_message     = "user_message"
+    council_started  = "council_started"
+    stage_progress   = "stage_progress"
+    member_response  = "member_response"
+    ranking_summary  = "ranking_summary"
+    verdict          = "verdict"
+    reflection       = "reflection"
+    precedent_hit    = "precedent_hit"
+    summon_requested = "summon_requested"
+    member_summoned  = "member_summoned"
+    system_event     = "system_event"
+
+
+class Thread(Base):
+    """Chat container — one per council session; also supports future standalone chat."""
+
+    __tablename__ = "threads"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+
+    # Nullable — null for standalone chat threads not backed by a council
+    council_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("council_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+    )
+
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(256), nullable=False)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    events: Mapped[list[ThreadEvent]] = relationship(
+        "ThreadEvent", back_populates="thread", cascade="all, delete-orphan",
+        order_by="ThreadEvent.id",
+    )
+    session: Mapped[CouncilSession | None] = relationship(
+        "CouncilSession", foreign_keys=[council_id]
+    )
+
+
+class ThreadEvent(Base):
+    """Append-only event log for a thread.
+
+    The BIGSERIAL ``id`` is both the global ordering primitive and the
+    pagination cursor (use ``before_id`` / ``after_id`` — never SQL OFFSET).
+
+    Primary index: (thread_id, id DESC) — single-partition scan for history.
+    """
+
+    __tablename__ = "thread_events"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=True), primary_key=True
+    )
+    thread_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("threads.id", ondelete="CASCADE"), nullable=False
+    )
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    # actor_id: "user:{sub}" | "agent:{model_id}" | "system"
+    actor_id: Mapped[str] = mapped_column(String(256), nullable=False)
+    actor_name: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+
+    # Human-readable content; null for non-message events
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Event-specific structured payload (see chat.md §8.3 for field shapes)
+    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    thread: Mapped[Thread] = relationship("Thread", back_populates="events")
