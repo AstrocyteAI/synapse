@@ -7,9 +7,18 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from synapse.council.models import CouncilMember, CouncilResult
+from synapse.council.models import ConflictResult, CouncilMember, CouncilResult
 from synapse.council.orchestrator import CouncilOrchestrator
 from synapse.memory.context import AstrocyteContext
+
+# Patch targets for B5/B6 additions
+_NO_THREAD = patch(
+    "synapse.council.orchestrator.get_thread_by_council", new=AsyncMock(return_value=None)
+)
+_NO_CONFLICT = patch(
+    "synapse.council.orchestrator.check_conflict",
+    new=AsyncMock(return_value=ConflictResult(detected=False)),
+)
 
 
 @pytest.fixture
@@ -19,6 +28,12 @@ def orchestrator(mock_astrocyte, mock_centrifugo, mock_llm):
     settings.stage2_timeout_seconds = 10
     settings.stage3_timeout_seconds = 10
     settings.max_precedents = 3
+    # B5 deliberation — disabled in unit tests (tested separately)
+    settings.deliberation_enabled = False
+    settings.max_deliberation_rounds = 1
+    settings.convergence_threshold = 0.72
+    settings.critique_timeout_seconds = 10
+    settings.revise_timeout_seconds = 10
     return CouncilOrchestrator(
         astrocyte=mock_astrocyte,
         centrifugo=mock_centrifugo,
@@ -66,7 +81,7 @@ def chairman():
 @pytest.mark.asyncio
 async def test_orchestrator_run_full_council(orchestrator, mock_db, two_members, chairman, context):
     """Full 3-stage run should return a CouncilResult with verdict."""
-    with patch("synapse.council.orchestrator.asyncio.create_task"):
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
         result = await orchestrator.run(
             session_id=uuid.uuid4(),
             question="What should we build next?",
@@ -89,7 +104,7 @@ async def test_orchestrator_publishes_stage_events(
     orchestrator, mock_db, two_members, chairman, context
 ):
     """Centrifugo publish_council_event should be called for key lifecycle events."""
-    with patch("synapse.council.orchestrator.asyncio.create_task"):
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
         await orchestrator.run(
             session_id=uuid.uuid4(),
             question="Q?",
@@ -119,7 +134,7 @@ async def test_orchestrator_solo_council_bypasses_rank(orchestrator, mock_db, co
     solo_member = [CouncilMember(model_id="openai/gpt-4o", name="GPT")]
     chairman = CouncilMember(model_id="anthropic/claude-opus-4-5", name="Chair")
 
-    with patch("synapse.council.orchestrator.asyncio.create_task"):
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
         result = await orchestrator.run(
             session_id=uuid.uuid4(),
             question="Solo question?",
@@ -140,7 +155,7 @@ async def test_orchestrator_single_member_bypasses_rank(orchestrator, mock_db, c
     single = [CouncilMember(model_id="openai/gpt-4o", name="GPT")]
     chairman = CouncilMember(model_id="anthropic/claude-opus-4-5", name="Chair")
 
-    with patch("synapse.council.orchestrator.asyncio.create_task"):
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
         result = await orchestrator.run(
             session_id=uuid.uuid4(),
             question="Q?",
@@ -185,7 +200,7 @@ async def test_orchestrator_continues_without_precedents(
 ):
     orchestrator._astrocyte.recall = AsyncMock(side_effect=Exception("Astrocyte unavailable"))
 
-    with patch("synapse.council.orchestrator.asyncio.create_task"):
+    with patch("synapse.council.orchestrator.asyncio.create_task"), _NO_THREAD, _NO_CONFLICT:
         result = await orchestrator.run(
             session_id=uuid.uuid4(),
             question="Q?",

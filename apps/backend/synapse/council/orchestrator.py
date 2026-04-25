@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from synapse.council.conflict import check_conflict
 from synapse.council.convergence import check_convergence
 from synapse.council.models import (
     CouncilMember,
@@ -24,7 +25,8 @@ from synapse.council.stages.rank import run_rank
 from synapse.council.stages.red_team import run_red_team
 from synapse.council.stages.revise import run_revise
 from synapse.council.stages.synthesise import run_synthesise
-from synapse.db.models import CouncilSession, CouncilStatus, CouncilTranscript
+from synapse.council.thread import append_event, get_thread_by_council
+from synapse.db.models import CouncilSession, CouncilStatus, CouncilTranscript, ThreadEventType
 from synapse.llm.client import LLMClient
 from synapse.memory.banks import Banks, council_tags, verdict_tags
 from synapse.memory.context import AstrocyteContext
@@ -271,15 +273,78 @@ class CouncilOrchestrator:
             {"verdict": synthesis.verdict, "confidence_label": synthesis.confidence_label},
         )
 
+        # --- Append verdict thread event ---
+        thread = await get_thread_by_council(db, session_id)
+        if thread:
+            verdict_event = await append_event(
+                db,
+                thread_id=thread.id,
+                event_type=ThreadEventType.verdict,
+                actor_id="system",
+                content=synthesis.verdict,
+                metadata={
+                    "council_id": council_id,
+                    "confidence_label": synthesis.confidence_label,
+                    "consensus_score": ranking_result.consensus_score,
+                    "dissent_detected": dissent_detected,
+                },
+            )
+            try:
+                from synapse.council.thread import thread_event_dict
+
+                await self._centrifugo.publish(
+                    f"thread:{thread.id}", thread_event_dict(verdict_event)
+                )
+            except Exception as e:
+                _logger.warning("Failed to publish verdict thread event: %s", e)
+
+        # --- Conflict detection (B6) ---
+        conflict_result = await check_conflict(
+            verdict=synthesis.verdict,
+            question=question,
+            precedents=precedents,
+            chairman_model_id=chairman.model_id,
+            llm=self._llm,
+            timeout=30.0,
+        )
+
+        if conflict_result.detected and thread:
+            conflict_event = await append_event(
+                db,
+                thread_id=thread.id,
+                event_type=ThreadEventType.conflict_detected,
+                actor_id="system",
+                content=conflict_result.summary
+                or "This verdict may conflict with a past decision.",
+                metadata={
+                    "council_id": council_id,
+                    "conflicting_content": conflict_result.conflicting_content,
+                    "precedent_score": conflict_result.precedent_score,
+                    "new_verdict": synthesis.verdict,
+                },
+            )
+            try:
+                from synapse.council.thread import thread_event_dict as _tdict
+
+                await self._centrifugo.publish(f"thread:{thread.id}", _tdict(conflict_event))
+            except Exception as e:
+                _logger.warning("Failed to publish conflict thread event: %s", e)
+
         # --- Persist to DB ---
+        final_status = (
+            CouncilStatus.pending_approval if conflict_result.detected else CouncilStatus.closed
+        )
         session = await db.get(CouncilSession, session_id)
         if session:
-            session.status = CouncilStatus.closed
+            session.status = final_status
             session.verdict = synthesis.verdict
             session.consensus_score = ranking_result.consensus_score
             session.confidence_label = synthesis.confidence_label
             session.dissent_detected = dissent_detected
-            session.closed_at = datetime.now(UTC)
+            if final_status == CouncilStatus.closed:
+                session.closed_at = datetime.now(UTC)
+            if conflict_result.detected:
+                session.conflict_metadata = conflict_result.model_dump()
 
             transcript = CouncilTranscript(
                 council_id=session_id,
@@ -312,7 +377,16 @@ class CouncilOrchestrator:
             )
         )
 
-        await publish("session_closed", {"session_id": council_id})
+        if final_status == CouncilStatus.closed:
+            await publish("session_closed", {"session_id": council_id})
+        else:
+            await publish(
+                "pending_approval",
+                {
+                    "session_id": council_id,
+                    "conflict_summary": conflict_result.summary,
+                },
+            )
 
         result = CouncilResult(
             session_id=session_id,

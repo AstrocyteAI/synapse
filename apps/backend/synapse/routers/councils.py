@@ -19,7 +19,14 @@ from synapse.council.models import (
     CreateCouncilRequest,
 )
 from synapse.council.orchestrator import CouncilOrchestrator
-from synapse.council.session import create_session, get_session, list_sessions, mark_failed
+from synapse.council.session import (
+    approve_session,
+    close_session,
+    create_session,
+    get_session,
+    list_sessions,
+    mark_failed,
+)
 from synapse.council.thread import (
     append_event,
     create_thread,
@@ -236,6 +243,81 @@ async def get_council_thread(
 
 
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# POST /v1/councils/{session_id}/close
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/councils/{session_id}/close",
+    summary="Force-close a council session",
+)
+async def close_council(
+    session_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    """Close a council immediately, regardless of current status.
+
+    Useful for the ``@close`` human-in-the-loop directive — terminates an
+    in-progress council and accepts whatever deliberation has occurred so far.
+    If the council is in ``pending_approval`` this overrides the conflict block.
+    """
+    session = await get_session(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Council session not found")
+    _assert_owns(session, user)
+
+    updated = await close_session(db, session_id)
+    return {
+        "session_id": str(session_id),
+        "status": updated.status if updated else "closed",
+        "verdict": updated.verdict if updated else None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/councils/{session_id}/approve
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/councils/{session_id}/approve",
+    summary="Approve a council verdict that is pending human review",
+)
+async def approve_council(
+    session_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    """Approve a council in ``pending_approval`` state and close it.
+
+    Returns 409 if the session is not in ``pending_approval``.
+    """
+    session = await get_session(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Council session not found")
+    _assert_owns(session, user)
+
+    from synapse.db.models import CouncilStatus
+
+    if session.status != CouncilStatus.pending_approval:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Council is not pending approval (status: {session.status})",
+        )
+
+    updated = await approve_session(db, session_id)
+    return {
+        "session_id": str(session_id),
+        "status": updated.status if updated else "closed",
+        "verdict": updated.verdict if updated else None,
+    }
+
+
+# ---------------------------------------------------------------------------
 # POST /v1/councils/{session_id}/chat  — Mode 3: chat with closed verdict
 # ---------------------------------------------------------------------------
 
@@ -447,6 +529,9 @@ def _session_summary(s) -> dict:
         "consensus_score": s.consensus_score,
         "created_at": s.created_at.isoformat(),
         "closed_at": s.closed_at.isoformat() if s.closed_at else None,
+        "conflict_detected": bool(s.conflict_metadata.get("detected"))
+        if s.conflict_metadata
+        else False,
     }
 
 
@@ -466,4 +551,5 @@ def _session_detail(s) -> dict:
         "closed_at": s.closed_at.isoformat() if s.closed_at else None,
         "members": s.members,
         "chairman": s.chairman,
+        "conflict_metadata": s.conflict_metadata,
     }

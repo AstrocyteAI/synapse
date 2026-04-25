@@ -52,6 +52,13 @@ class SynthesisResult(BaseModel):
     uncertainty_markers: list[str] = Field(default_factory=list)
 
 
+class ConflictResult(BaseModel):
+    detected: bool
+    summary: str | None = None  # LLM-generated explanation of the conflict
+    conflicting_content: str | None = None  # the precedent text that conflicts
+    precedent_score: float | None = None  # similarity score of the conflicting precedent
+
+
 class MemberCritique(BaseModel):
     member_id: str
     member_name: str

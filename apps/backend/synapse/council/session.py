@@ -81,6 +81,24 @@ async def mark_failed(
         await db.commit()
 
 
+async def approve_session(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+) -> CouncilSession | None:
+    """Approve a council in pending_approval state and close it.
+
+    No-ops if the session is already closed/failed or not in pending_approval.
+    Returns the updated session, or None if not found.
+    """
+    session = await db.get(CouncilSession, session_id)
+    if session and session.status == CouncilStatus.pending_approval:
+        session.status = CouncilStatus.closed
+        session.closed_at = datetime.now(UTC)
+        await db.commit()
+        await db.refresh(session)
+    return session
+
+
 async def close_session(
     db: AsyncSession,
     session_id: uuid.UUID,

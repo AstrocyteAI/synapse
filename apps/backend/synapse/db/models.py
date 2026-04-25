@@ -36,6 +36,9 @@ class CouncilStatus(StrEnum):
     stage_1 = "stage_1"
     stage_2 = "stage_2"
     stage_3 = "stage_3"
+    pending_approval = (
+        "pending_approval"  # verdict ready, conflict detected — awaiting human review
+    )
     closed = "closed"
     failed = "failed"
 
@@ -67,6 +70,9 @@ class CouncilSession(Base):
     consensus_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     confidence_label: Mapped[str | None] = mapped_column(String(16), nullable=True)
     dissent_detected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # Conflict detection (B6) — populated when a verdict contradicts a precedent
+    conflict_metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
 
     # Metadata
     topic_tag: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -130,6 +136,7 @@ class ThreadEventType(StrEnum):
     summon_requested = "summon_requested"
     member_summoned = "member_summoned"
     system_event = "system_event"
+    conflict_detected = "conflict_detected"
 
 
 class Thread(Base):
