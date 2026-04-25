@@ -59,6 +59,11 @@ services:
     volumes:
       - ./apps/backend/centrifugo.yaml:/centrifugo/config.yaml
     command: centrifugo --config=/centrifugo/config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
 
   # ---------------------------------------------------------------------------
   # Synapse PostgreSQL

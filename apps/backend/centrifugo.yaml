@@ -4,6 +4,7 @@
 http_server:
   port: 8001         # WebSocket / SSE — client connections
   address: "0.0.0.0"
+  health: true       # enables GET /health → 200 OK
 
 grpc_api:
   enabled: false
