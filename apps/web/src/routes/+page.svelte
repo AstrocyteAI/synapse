@@ -1,18 +1,37 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { createCouncil, getToken, setToken } from '$lib/api/client';
+	import { createCouncil, getToken, setToken, listTemplates } from '$lib/api/client';
 	import ChatInput from '$lib/components/chat/ChatInput.svelte';
+	import TemplatePicker from '$lib/components/council/TemplatePicker.svelte';
+	import type { Template } from '$lib/api/types';
 
 	let submitting = $state(false);
 	let error = $state('');
 	let tokenInput = $state('');
 	let showTokenForm = $state(!getToken());
+	let templates = $state<Template[]>([]);
+	let selectedTemplate = $state<string | null>(null);
+
+	onMount(async () => {
+		if (getToken()) {
+			try {
+				templates = await listTemplates();
+			} catch {
+				// Non-fatal — template picker just won't show
+			}
+		}
+	});
 
 	function saveToken() {
 		if (tokenInput.trim()) {
 			setToken(tokenInput.trim());
 			showTokenForm = false;
 			tokenInput = '';
+			// Load templates now that we have a token
+			listTemplates()
+				.then((t) => (templates = t))
+				.catch(() => {});
 		}
 	}
 
@@ -20,7 +39,7 @@
 		submitting = true;
 		error = '';
 		try {
-			const result = await createCouncil(content);
+			const result = await createCouncil(content, selectedTemplate ?? undefined);
 			goto(`/councils/${result.session_id}`);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong';
@@ -64,8 +83,20 @@
 				</div>
 			{/if}
 
+			{#if templates.length > 0}
+				<div class="mb-4">
+					<TemplatePicker
+						{templates}
+						selected={selectedTemplate}
+						onselect={(id) => (selectedTemplate = id)}
+					/>
+				</div>
+			{/if}
+
 			<ChatInput
-				placeholder="Should we migrate to microservices? What architecture best fits our scale?"
+				placeholder={selectedTemplate
+					? `Ask a question for the ${templates.find((t) => t.id === selectedTemplate)?.name ?? selectedTemplate} council…`
+					: 'Should we migrate to microservices? What architecture best fits our scale?'}
 				{submitting}
 				onsubmit={handleSubmit}
 			/>

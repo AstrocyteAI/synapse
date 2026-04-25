@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { getCouncil, getCouncilThread, sendMessage, closeCouncil } from '$lib/api/client';
+	import { getCouncil, getCouncilThread, sendMessage, closeCouncil, chatWithVerdict } from '$lib/api/client';
 	import { subscribeToThread, type Unsubscriber } from '$lib/stores/centrifugo';
 	import { threadEvents, loadHistory, appendEvent, clearThread } from '$lib/stores/thread';
 	import ChatThread from '$lib/components/chat/ChatThread.svelte';
@@ -79,6 +79,11 @@
 			if (content.startsWith('@close')) {
 				await closeCouncil(sessionId);
 				await refreshCouncil();
+			} else if (council?.status === 'closed') {
+				// Mode 3: chat with verdict — backend appends user_message + reflection
+				// events to the thread and publishes them via Centrifugo, so they appear
+				// in the thread automatically. No need to manually appendEvent here.
+				await chatWithVerdict(sessionId, content);
 			} else {
 				const event = await sendMessage(threadId, content);
 				appendEvent(event);

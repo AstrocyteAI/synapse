@@ -56,6 +56,27 @@ export interface CreateCouncilResponse {
 	status: CouncilStatus;
 }
 
+export interface Template {
+	id: string;
+	name: string;
+	description: string;
+	council_type: string;
+	topic_tag: string | null;
+	member_count: number;
+	config: Record<string, unknown>;
+}
+
+export interface TemplateDetail extends Template {
+	members: Record<string, unknown>[];
+	chairman: Record<string, unknown>;
+}
+
+export interface ChatWithVerdictResponse {
+	answer: string;
+	sources: unknown[];
+	session_id: string;
+}
+
 export type CouncilStatus =
 	| 'pending'
 	| 'stage_1'

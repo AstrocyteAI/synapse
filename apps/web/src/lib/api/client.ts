@@ -1,7 +1,9 @@
 import type {
+	ChatWithVerdictResponse,
 	CouncilDetail,
 	CouncilSummary,
 	CreateCouncilResponse,
+	Template,
 	ThreadEventsResponse
 } from './types';
 
@@ -48,10 +50,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 // Councils
 // ---------------------------------------------------------------------------
 
-export async function createCouncil(question: string): Promise<CreateCouncilResponse> {
+export async function createCouncil(
+	question: string,
+	templateId?: string
+): Promise<CreateCouncilResponse> {
 	return request('/v1/councils', {
 		method: 'POST',
-		body: JSON.stringify({ question })
+		body: JSON.stringify({ question, ...(templateId ? { template_id: templateId } : {}) })
 	});
 }
 
@@ -97,6 +102,24 @@ export async function sendMessage(
 		method: 'POST',
 		body: JSON.stringify({ content })
 	});
+}
+
+export async function chatWithVerdict(
+	sessionId: string,
+	message: string
+): Promise<ChatWithVerdictResponse> {
+	return request(`/v1/councils/${sessionId}/chat`, {
+		method: 'POST',
+		body: JSON.stringify({ message })
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------
+
+export async function listTemplates(): Promise<Template[]> {
+	return request('/v1/templates');
 }
 
 // ---------------------------------------------------------------------------
