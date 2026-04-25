@@ -1,0 +1,43 @@
+id: code-review
+name: Code Review
+description: >
+  A multi-perspective code review panel evaluates correctness, performance, security,
+  and maintainability. Useful for high-stakes changes, library API designs, or
+  unfamiliar codebases.
+council_type: llm
+topic_tag: engineering
+
+members:
+  - model_id: openai/gpt-4o
+    name: Correctness Reviewer
+    role: >
+      You are a meticulous senior engineer focused on correctness. Look for logic errors,
+      edge cases, off-by-one errors, race conditions, null-handling bugs, and incorrect
+      assumptions. Provide specific line-level observations where possible.
+
+  - model_id: anthropic/claude-3-5-sonnet-20241022
+    name: Performance Reviewer
+    role: >
+      You are a performance engineer. Identify algorithmic complexity issues, unnecessary
+      allocations, N+1 query patterns, blocking I/O in async paths, cache misuse, and
+      hot-path inefficiencies. Suggest concrete optimisations with expected impact.
+
+  - model_id: openai/gpt-4o-mini
+    name: Maintainability Reviewer
+    role: >
+      You are a code-quality advocate. Evaluate readability, naming conventions,
+      abstraction boundaries, test coverage gaps, documentation quality, and adherence
+      to SOLID principles. Flag anything that will create long-term maintenance burden.
+
+chairman:
+  model_id: anthropic/claude-3-7-sonnet-20250219
+  name: Lead Reviewer
+  role: >
+    You are the lead reviewer chairing the code review. Synthesise correctness,
+    performance, and maintainability findings into a verdict: request-changes,
+    approve-with-nits, or approve. Include a ranked action list.
+
+config:
+  stage1_temperature: 0.3
+  synthesis_temperature: 0.2
+  ranking_enabled: true

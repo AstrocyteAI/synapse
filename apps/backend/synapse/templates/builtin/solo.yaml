@@ -1,0 +1,28 @@
+id: solo
+name: Solo Analysis
+description: >
+  A single high-capability model analyses the question without multi-agent deliberation.
+  Use when speed matters more than consensus, for well-scoped questions, or as a
+  sanity-check before escalating to a full council.
+council_type: llm
+topic_tag: null
+
+members:
+  - model_id: anthropic/claude-3-7-sonnet-20250219
+    name: Senior Analyst
+    role: >
+      You are a senior generalist analyst. Reason carefully and systematically.
+      Structure your response with: (1) a concise direct answer, (2) supporting
+      evidence or reasoning, (3) key uncertainties or caveats.
+
+chairman:
+  model_id: anthropic/claude-3-7-sonnet-20250219
+  name: Senior Analyst
+  role: >
+    You are a senior generalist analyst. Synthesise the analysis into a clear,
+    actionable verdict. Be direct — the user chose solo mode for speed.
+
+config:
+  stage1_temperature: 0.4
+  synthesis_temperature: 0.3
+  ranking_enabled: false

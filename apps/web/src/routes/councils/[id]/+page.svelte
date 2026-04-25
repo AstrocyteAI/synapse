@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
-	import { getCouncil, getCouncilThread, sendMessage } from '$lib/api/client';
+	import { getCouncil, getCouncilThread, sendMessage, closeCouncil } from '$lib/api/client';
 	import { subscribeToThread, type Unsubscriber } from '$lib/stores/centrifugo';
 	import { threadEvents, loadHistory, appendEvent, clearThread } from '$lib/stores/thread';
 	import ChatThread from '$lib/components/chat/ChatThread.svelte';
@@ -76,8 +76,13 @@
 		sending = true;
 		sendError = '';
 		try {
-			const event = await sendMessage(threadId, content);
-			appendEvent(event);
+			if (content.startsWith('@close')) {
+				await closeCouncil(sessionId);
+				await refreshCouncil();
+			} else {
+				const event = await sendMessage(threadId, content);
+				appendEvent(event);
+			}
 		} catch (err) {
 			sendError = err instanceof Error ? err.message : 'Failed to send message';
 		} finally {
@@ -139,6 +144,7 @@
 					? 'Ask a follow-up question about this verdict…'
 					: 'Contribute context to the deliberation…'}
 				submitting={sending}
+				showDirectives={council.status !== 'closed' && council.status !== 'failed'}
 				onsubmit={handleSend}
 			/>
 		</div>

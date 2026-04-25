@@ -31,6 +31,7 @@ from synapse.db.session import get_session as get_db_session
 from synapse.llm.client import LLMClient
 from synapse.memory.banks import Banks
 from synapse.memory.context import build_context
+from synapse.templates.registry import get_registry
 
 _logger = logging.getLogger(__name__)
 
@@ -87,6 +88,11 @@ async def create_council(
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
     settings = request.app.state.settings
+
+    # Template resolution — apply before member/chairman fallbacks so that
+    # explicit request fields always win over template defaults.
+    body = _apply_template(body)
+
     members = _resolve_members(body.members, settings)
     chairman = _resolve_chairman(body.chairman, settings)
 
@@ -369,6 +375,29 @@ async def stream_council(
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+
+def _apply_template(body: CreateCouncilRequest) -> CreateCouncilRequest:
+    """Merge template defaults into the request.  Explicit request fields win."""
+    if not body.template_id:
+        return body
+    tmpl = get_registry().get(body.template_id)
+    if tmpl is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Template '{body.template_id}' not found",
+        )
+    return CreateCouncilRequest(
+        question=body.question,
+        template_id=body.template_id,
+        # Explicit overrides win; fall back to template values
+        members=body.members or [CouncilMember(**m) for m in tmpl.members],
+        chairman=body.chairman or CouncilMember(**tmpl.chairman),
+        council_type=body.council_type if body.council_type != "llm" else tmpl.council_type,
+        topic_tag=body.topic_tag or tmpl.topic_tag,
+        # Merge configs: template base, then request overrides on top
+        config={**tmpl.config, **body.config},
+    )
 
 
 async def _publish(request: Request, thread_id: uuid.UUID, payload: dict) -> None:

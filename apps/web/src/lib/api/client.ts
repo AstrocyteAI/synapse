@@ -67,6 +67,12 @@ export async function getCouncilThread(sessionId: string): Promise<{ thread_id: 
 	return request(`/v1/councils/${sessionId}/thread`);
 }
 
+export async function closeCouncil(
+	sessionId: string
+): Promise<{ session_id: string; status: string; verdict: string | null }> {
+	return request(`/v1/councils/${sessionId}/close`, { method: 'POST', body: JSON.stringify({}) });
+}
+
 // ---------------------------------------------------------------------------
 // Threads
 // ---------------------------------------------------------------------------
