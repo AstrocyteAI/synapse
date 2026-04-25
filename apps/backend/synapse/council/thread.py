@@ -68,7 +68,7 @@ async def append_event(
         actor_id=actor_id,
         actor_name=actor_name,
         content=content,
-        metadata=metadata or {},
+        event_metadata=metadata or {},
     )
     db.add(event)
     await db.commit()

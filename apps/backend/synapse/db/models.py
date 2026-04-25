@@ -187,7 +187,11 @@ class ThreadEvent(Base):
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Event-specific structured payload (see chat.md §8.3 for field shapes)
-    metadata: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # Named "event_metadata" on the Python side; "metadata" is reserved by SQLAlchemy's
+    # Declarative API (it is the MetaData object on every Base subclass).
+    event_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, nullable=False, default=dict
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow

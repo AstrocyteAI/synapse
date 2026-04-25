@@ -125,6 +125,6 @@ def _event_dict(event) -> dict:
         "actor_id": event.actor_id,
         "actor_name": event.actor_name,
         "content": event.content,
-        "metadata": event.metadata,
+        "metadata": event.event_metadata,
         "created_at": event.created_at.isoformat(),
     }

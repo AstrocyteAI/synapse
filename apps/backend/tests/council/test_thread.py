@@ -121,7 +121,7 @@ async def test_append_event_writes_to_db():
     assert event.thread_id == thread_id
     assert event.event_type == ThreadEventType.user_message
     assert event.content == "What should we prioritise?"
-    assert event.metadata == {"extra": "data"}
+    assert event.event_metadata == {"extra": "data"}
 
 
 @pytest.mark.asyncio
@@ -139,7 +139,7 @@ async def test_append_event_defaults_metadata_to_empty_dict():
     )
 
     event = db.add.call_args[0][0]
-    assert event.metadata == {}
+    assert event.event_metadata == {}
 
 
 # ---------------------------------------------------------------------------
