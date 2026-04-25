@@ -1,0 +1,18 @@
+# Astrocyte gateway configuration for Synapse local development
+# Mounted into the astrocyte-gateway container at /config/astrocyte.yaml
+
+provider_tier: storage
+vector_store: pgvector
+llm_provider: mock       # replace with real LLM provider when reflect() is needed
+
+mip_config_path: /config/mip.yaml
+
+barriers:
+  pii:
+    mode: disabled         # enable in production
+
+escalation:
+  degraded_mode: error
+
+access_control:
+  enabled: false           # enable in production with per-bank grants

@@ -1,0 +1,34 @@
+# Centrifugo v5 configuration for Synapse
+# Secrets are injected via environment variables (CENTRIFUGO_TOKEN_HMAC_SECRET_KEY, CENTRIFUGO_API_KEY)
+
+http_server:
+  port: 8001         # WebSocket / SSE — client connections
+  address: "0.0.0.0"
+
+grpc_api:
+  enabled: false
+
+http_api:
+  port: 8002         # HTTP API — FastAPI publishes here
+  address: "0.0.0.0"
+  key: ""            # Overridden by CENTRIFUGO_API_KEY env var
+
+# Channel namespaces
+namespaces:
+  - name: council
+    presence: true           # track connected clients per channel
+    join_leave: true         # emit join/leave events
+    history_size: 200        # keep last 200 events per channel
+    history_ttl: "48h"       # retain history for 48 hours
+    force_recovery: true     # clients auto-recover missed events on reconnect
+    allow_subscribe_for_client: true
+
+log:
+  level: info
+  format: json
+
+# Allowed origins for WebSocket connections (extend in production)
+allowed_origins:
+  - "http://localhost:5173"   # Svelte dev server
+  - "http://localhost:3000"   # Svelte preview
+  - "http://localhost:8000"   # Synapse backend (for SSE proxy)

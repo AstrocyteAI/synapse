@@ -1,0 +1,56 @@
+# MIP (Memory Intent Protocol) routing rules for Synapse
+# Mounted into the astrocyte-gateway container at /config/mip.yaml
+version: "1.0"
+
+banks:
+  - id: councils
+    description: "Full council session transcripts — all stages, all member responses, rankings"
+    access: ["*"]
+
+  - id: decisions
+    description: "Concise extracted verdicts and rationale (≤200 words, LLM-summarised)"
+    access: ["*"]
+
+  - id: precedents
+    description: "Curated high-quality decisions promoted from decisions bank — injected pre-Stage 1"
+    access: ["*"]
+
+  - id: agents
+    description: "Per-agent context and identity — scoped to the agent principal"
+    access: ["*"]
+
+rules:
+  - name: route-councils
+    priority: 10
+    match:
+      tags: [council]
+    action:
+      bank: councils
+
+  - name: route-decisions
+    priority: 20
+    match:
+      tags: [verdict]
+    action:
+      bank: decisions
+
+  - name: route-precedents
+    priority: 30
+    match:
+      tags: [precedent]
+    action:
+      bank: precedents
+
+  - name: route-agents
+    priority: 40
+    match:
+      tags: [agent]
+    action:
+      bank: agents
+
+  - name: route-default
+    priority: 100
+    match:
+      all: []
+    action:
+      bank: decisions

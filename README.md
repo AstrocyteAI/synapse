@@ -1,6 +1,8 @@
 # Synapse
 
-Synapse is a multi-agent deliberation system built on [Astrocyte](../astrocyte). It orchestrates councils of AI agents to reason collectively, retains their decisions in governed memory, and lets future councils recall what was previously decided.
+**A new kind of chat for the AI age — humans and agents, thinking and acting together.**
+
+Synapse is built on [Astrocyte](../astrocyte). It orchestrates councils of AI agents to reason collectively, retains their decisions in governed memory, and lets future councils recall what was previously decided.
 
 The name is deliberate: in neuroscience, a synapse is the connection point between neurons where computation happens. Astrocytes mediate and maintain the environment around those synapses. Synapse is the deliberation layer that Astrocyte makes possible.
 

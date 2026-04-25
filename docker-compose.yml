@@ -1,0 +1,132 @@
+# Synapse local development stack
+#
+#   cp .env.example .env
+#   docker compose up --build
+#
+# Services:
+#   synapse-backend     FastAPI council engine          http://localhost:8000
+#   centrifugo          Real-time WebSocket/SSE sidecar ws://localhost:8001
+#   postgres            Synapse PostgreSQL              localhost:5432
+#   astrocyte-gateway   Astrocyte memory gateway        http://localhost:8080 (internal)
+#   astrocyte-postgres  Astrocyte PostgreSQL            localhost:5433
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # Synapse backend (FastAPI + Centrifugo client)
+  # ---------------------------------------------------------------------------
+  synapse-backend:
+    build:
+      context: apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://synapse:synapse@postgres:5432/synapse
+      ASTROCYTE_GATEWAY_URL: http://astrocyte-gateway:8080
+      ASTROCYTE_TOKEN: ${ASTROCYTE_TOKEN:-dev-astrocyte-api-key}
+      CENTRIFUGO_API_URL: http://centrifugo:8002
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:-dev-centrifugo-api-key}
+      CENTRIFUGO_TOKEN_SECRET: ${CENTRIFUGO_TOKEN_SECRET:-dev-centrifugo-token-secret}
+      SYNAPSE_AUTH_MODE: ${SYNAPSE_AUTH_MODE:-jwt_hs256}
+      SYNAPSE_JWT_SECRET: ${SYNAPSE_JWT_SECRET:-dev-jwt-secret-change-in-production}
+      SYNAPSE_JWT_AUDIENCE: ${SYNAPSE_JWT_AUDIENCE:-synapse}
+      SYNAPSE_LLM_PROVIDER: ${SYNAPSE_LLM_PROVIDER:-litellm}
+      LITELLM_API_BASE: ${LITELLM_API_BASE:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      astrocyte-gateway:
+        condition: service_healthy
+      centrifugo:
+        condition: service_started
+    volumes:
+      - ./apps/backend:/app  # hot reload in dev
+    command: ["uvicorn", "synapse.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  # ---------------------------------------------------------------------------
+  # Centrifugo — real-time WebSocket/SSE sidecar
+  # ---------------------------------------------------------------------------
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    ports:
+      - "8001:8001"   # WebSocket / SSE (client connections)
+      - "8002:8002"   # HTTP API (FastAPI publishes here)
+    environment:
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_SECRET:-dev-centrifugo-token-secret}
+      CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:-dev-centrifugo-api-key}
+    volumes:
+      - ./apps/backend/centrifugo.yaml:/centrifugo/config.yaml
+    command: centrifugo --config=/centrifugo/config.yaml
+
+  # ---------------------------------------------------------------------------
+  # Synapse PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_DB: synapse
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - synapse_postgres_data:/var/lib/postgresql/data
+
+  # ---------------------------------------------------------------------------
+  # Astrocyte gateway — memory backend
+  # ---------------------------------------------------------------------------
+  astrocyte-gateway:
+    build:
+      context: ../astrocyte/astrocyte-services-py
+      dockerfile: astrocyte-gateway-py/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      ASTROCYTE_VECTOR_STORE: pgvector
+      ASTROCYTE_HOST: 0.0.0.0
+      ASTROCYTE_PORT: 8080
+      ASTROCYTE_AUTH_MODE: api_key
+      ASTROCYTE_API_KEY: ${ASTROCYTE_TOKEN:-dev-astrocyte-api-key}
+      DATABASE_URL: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      ASTROCYTE_CONFIG_PATH: /config/astrocyte.yaml
+    volumes:
+      - ./apps/backend/astrocyte.yaml:/config/astrocyte.yaml:ro
+      - ./apps/backend/mip.yaml:/config/mip.yaml:ro
+    depends_on:
+      astrocyte-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/live || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Astrocyte PostgreSQL (pgvector)
+  # ---------------------------------------------------------------------------
+  astrocyte-postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: astrocyte
+      POSTGRES_PASSWORD: astrocyte
+      POSTGRES_DB: astrocyte
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astrocyte -d astrocyte"]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - astrocyte_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  synapse_postgres_data:
+  astrocyte_postgres_data:
