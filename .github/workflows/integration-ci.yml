@@ -33,7 +33,10 @@ jobs:
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          # GHCR_TOKEN = classic PAT with read:packages scope (needed while
+          # ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py is private).
+          # Once the package is made public this secret is no longer required.
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Build astrocyte-postgres image (pgvector + AGE)
         run: docker build --tag synapse/astrocyte-postgres:ci docker/astrocyte-postgres/
@@ -96,7 +99,7 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://synapse:synapse@localhost:5432/synapse
           ASTROCYTE_GATEWAY_URL: http://localhost:8080
           ASTROCYTE_TOKEN: dev-astrocyte-api-key
-        run: uv run pytest -m integration --integration -v
+        run: uv run pytest -m integration -v
 
       - name: Dump service logs on failure
         if: failure()
