@@ -62,16 +62,20 @@ def _parse_ranking(text: str, labels: list[str]) -> list[str]:
     match = re.search(r"FINAL RANKING:\s*(.*?)(?:\n\n|\Z)", text, re.DOTALL | re.IGNORECASE)
     section = match.group(1) if match else text
 
+    # Match labels in the order they appear in the text (not alphabetical label order)
+    label_alts = "|".join(re.escape(lbl) for lbl in labels)
+    pattern = re.compile(rf"\bResponse\s+({label_alts})\b", re.IGNORECASE)
+
     found: list[str] = []
-    for label in labels:
-        pattern = re.compile(rf"\bResponse\s+{re.escape(label)}\b", re.IGNORECASE)
-        if pattern.search(section) and f"Response {label}" not in found:
-            found.append(f"Response {label}")
+    for m in pattern.finditer(section):
+        entry = f"Response {m.group(1).upper()}"
+        if entry not in found:
+            found.append(entry)
 
     # Fill in any missing labels at the end (parser fallback)
-    for label in labels:
-        if f"Response {label}" not in found:
-            found.append(f"Response {label}")
+    for lbl in labels:
+        if f"Response {lbl}" not in found:
+            found.append(f"Response {lbl}")
 
     return found
 

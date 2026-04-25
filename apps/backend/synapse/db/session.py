@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fastapi import Request
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -18,7 +19,7 @@ def create_engine_and_sessionmaker(
     return engine, sessionmaker
 
 
-async def get_session(request):  # noqa: ANN001 — FastAPI Request
+async def get_session(request: Request):
     """FastAPI dependency: yields an AsyncSession per request."""
     async with request.app.state.sessionmaker() as session:
         yield session

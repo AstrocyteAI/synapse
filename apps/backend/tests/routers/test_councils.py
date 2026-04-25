@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from synapse.config import get_settings
 from synapse.db.models import CouncilSession, CouncilStatus
 from synapse.main import create_app
 from tests.conftest import TEST_SETTINGS, make_jwt
@@ -20,37 +19,39 @@ from tests.conftest import TEST_SETTINGS, make_jwt
 
 
 @pytest.fixture
-def app(mock_astrocyte, mock_centrifugo, mock_llm):
-    """Create a test app with state wired up to mocks — no real DB."""
-    get_settings.cache_clear()
+def _wired_client(mock_astrocyte, mock_centrifugo, mock_llm):
+    """App + TestClient with mocks applied *after* lifespan runs.
 
+    Lifespan overwrites app.state — we must patch synapse.main.get_settings so
+    it uses TEST_SETTINGS, then override astrocyte/centrifugo/sessionmaker after
+    the lifespan yields.
+    """
     application = create_app()
-
-    # Patch app.state directly after creation
-    application.state.settings = TEST_SETTINGS
-    application.state.astrocyte = mock_astrocyte
-    application.state.centrifugo = mock_centrifugo
-
-    # Mock sessionmaker
     mock_session = AsyncMock()
     mock_sessionmaker = MagicMock()
     mock_sessionmaker.return_value.__aenter__ = AsyncMock(return_value=mock_session)
     mock_sessionmaker.return_value.__aexit__ = AsyncMock(return_value=None)
-    application.state.sessionmaker = mock_sessionmaker
 
-    return application, mock_session
+    with (
+        patch("synapse.main.get_settings", return_value=TEST_SETTINGS),
+        TestClient(application, raise_server_exceptions=False) as c,
+    ):
+        # Lifespan has run with TEST_SETTINGS — now inject test doubles
+        application.state.astrocyte = mock_astrocyte
+        application.state.centrifugo = mock_centrifugo
+        application.state.sessionmaker = mock_sessionmaker
+        yield c, mock_session
 
 
 @pytest.fixture
-def client(app):
-    application, _ = app
-    with TestClient(application, raise_server_exceptions=False) as c:
-        yield c
+def client(_wired_client):
+    c, _ = _wired_client
+    return c
 
 
 @pytest.fixture
-def db_session(app):
-    _, session = app
+def db_session(_wired_client):
+    _, session = _wired_client
     return session
 
 
