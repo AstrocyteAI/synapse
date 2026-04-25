@@ -1,0 +1,106 @@
+/*
+  Synapse theme — light mode: violet (#7c3aed).
+  Dark mode: lavender (#a78bfa) so the multi-agent feel reads warm on dark backgrounds.
+*/
+
+/* ── Light mode ─────────────────────────────────────── */
+:root {
+  --sl-color-accent-low:  #f5f3ff;
+  --sl-color-accent:      #7c3aed;
+  --sl-color-accent-high: #4c1d95;
+  --sl-color-text-accent: #7c3aed;
+
+  --sl-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Cantarell,
+    "Noto Sans", sans-serif;
+  --sl-font-mono: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+
+  --sl-text-2xl: 1.65rem;
+
+  --astrocytes-radius-card: 0.75rem;
+  --astrocytes-radius-shell: 1rem;
+
+  --landing-hero-glow: radial-gradient(
+    ellipse 80% 50% at 70% 18%,
+    color-mix(in srgb, var(--sl-color-accent) 16%, transparent) 0%,
+    transparent 58%
+  );
+}
+
+/* ── Dark mode ───────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --sl-color-accent-low:  #2e1065;
+  --sl-color-accent:      #a78bfa;
+  --sl-color-accent-high: #ede9fe;
+  --sl-color-text-accent: #c4b5fd;
+
+  --landing-hero-glow: radial-gradient(
+    ellipse 90% 55% at 75% 0%,
+    color-mix(in srgb, var(--sl-color-accent) 22%, transparent) 0%,
+    transparent 50%
+  );
+}
+
+/* ── Splash / landing atmosphere ────────────────────── */
+html[data-has-hero]:not([data-has-sidebar]) body {
+  background-image: var(--landing-hero-glow);
+  background-attachment: fixed;
+}
+
+/* ── Feature section cards ──────────────────────────── */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.25rem;
+  margin-block: 1.5rem 2.5rem;
+  align-items: stretch;
+}
+
+.feature-grid > .feature-card {
+  margin-block: 0;
+}
+
+@media (min-width: 60rem) {
+  .feature-grid--cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.feature-card {
+  border: 1px solid var(--sl-color-gray-5);
+  border-radius: var(--astrocytes-radius-card);
+  padding: 1.5rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: color-mix(in srgb, var(--sl-color-bg) 88%, var(--sl-color-gray-6));
+}
+
+.feature-card:hover {
+  border-color: var(--sl-color-accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--sl-color-accent) 35%, transparent);
+}
+
+.feature-card h3 {
+  margin-block-start: 0;
+  font-size: 1.1rem;
+}
+
+.feature-card p {
+  font-size: 0.92rem;
+  opacity: 0.82;
+  margin-block-end: 0;
+}
+
+/* ── Starlight Card/LinkCard rounded corners ─────────── */
+.sl-markdown-content .card-grid > article.card,
+.landing .card-grid > article.card {
+  border-radius: var(--astrocytes-radius-card);
+}
+
+.sl-markdown-content .sl-link-card,
+.landing .sl-link-card {
+  border-radius: var(--astrocytes-radius-card);
+}
+
+.sl-markdown-content .starlight-aside {
+  border-radius: var(--astrocytes-radius-card);
+}
