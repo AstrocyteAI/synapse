@@ -1,6 +1,6 @@
 # Synapse architecture
 
-This document defines the layer boundaries, component responsibilities, data flow, and relationship to Astrocyte for the Synapse system.
+This document defines the layer boundaries, component responsibilities, data flow, and relationship to Astrocyte for the Synapse open-source self-hosted system.
 
 For the council deliberation model, see `council-engine.md`. For technology decisions, see `tech-stack.md`. For the monorepo layout, see `project-structure.md`.
 
@@ -15,15 +15,14 @@ Synapse owns:
 - The **deliberation pipeline** — structured stages for gathering, ranking, and synthesising agent opinions; multi-round cycles and red team mode
 - The **template engine** — built-in and custom council templates with field inheritance
 - The **chat layer** — three modes: starting a council via chat, participating during a council (human-in-the-loop), and chatting with a closed verdict via Astrocyte `reflect()`
-- The **streaming layer** — real-time stage progress to connected frontends via SSE; bi-directional WebSocket for human participants
+- The **real-time layer** — Centrifugo sidecar handling all WebSocket and SSE connections; FastAPI publishes events, Centrifugo delivers to clients
 - The **event bus and webhook dispatcher** — outbound HMAC-signed webhook delivery of council lifecycle events; export integrations (Notion, Confluence, GitHub, Linear, Markdown)
 - The **scheduler** — one-time, recurring (cron), and externally triggered councils
 - The **notification system** — email notifications (council concluded, approvals, conflicts, weekly digest) with per-user preferences
 - The **RBAC layer** — five roles with JWT claim mapping; API key management with scope enforcement
 - The **analytics engine** — member performance, decision velocity, consensus distribution, topic clustering
-- The **billing integration** — Stripe subscription management, quota enforcement, per-tenant usage metering
 - The **MCP server** — council tools for agent-to-agent access
-- The **frontend API** — REST, SSE, and WebSocket endpoints consumed by web, desktop, mobile, and messaging integration clients
+- The **frontend API** — REST endpoints and Centrifugo channel tokens consumed by web, desktop, mobile, and messaging integration clients
 
 Synapse does **not** own:
 - Memory storage, retrieval, or synthesis — that is Astrocyte
@@ -41,7 +40,8 @@ Synapse does **not** own:
 │                                                         │
 │   Council dashboard · Chat · Memory explorer · Notifications │
 └────────────────────────┬────────────────────────────────┘
-                         │  REST + SSE + WebSocket
+                         │  REST (all API calls)
+                         │  WebSocket / SSE (via Centrifugo)
 ┌────────────────────────▼────────────────────────────────┐
 │                  Synapse Backend                        │
 │                  FastAPI  ·  Python 3.12+               │
@@ -53,26 +53,22 @@ Synapse does **not** own:
 │  └─────────────────────────────────────────────────┘   │
 │                                                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  MCP Server  │  │  REST + SSE  │  │  Auth (JWT)  │  │
-│  │  (agent      │  │  WebSocket   │  │              │  │
-│  │   access)    │  │  (chat)      │  │              │  │
+│  │  MCP Server  │  │  REST API    │  │  Auth (JWT)  │  │
+│  │  (agent      │  │  FastAPI     │  │  python-jose │  │
+│  │   access)    │  │              │  │              │  │
 │  └──────────────┘  └──────────────┘  └──────────────┘  │
 │                                                         │
 │  ┌─────────────────────────────────────────────────┐   │
-│  │           AstrocyteClient (abstraction)         │   │
+│  │  AstrocyteGatewayClient (httpx, gateway only)   │   │
 │  │   retain · recall · reflect · forget            │   │
 │  └──────────────────────┬──────────────────────────┘   │
-└─────────────────────────┼───────────────────────────────┘
-                          │
-              ┌───────────┴───────────┐
-              │                       │
-    ┌─────────▼──────┐    ┌───────────▼────────┐
-    │ Library mode   │    │  Gateway mode       │
-    │ (in-process)   │    │  HTTP → astrocyte-  │
-    │                │    │  gateway-py         │
-    └─────────┬──────┘    └───────────┬─────────┘
-              └───────────┬───────────┘
-                          │
+│                          │  HTTP publish                 │
+│  ┌───────────────────────▼─────────────────────────┐   │
+│  │           Centrifugo  (Go sidecar)              │   │
+│  │   WebSocket · SSE · presence · history          │   │
+│  └─────────────────────────────────────────────────┘   │
+└─────────────────────────┬───────────────────────────────┘
+                          │  HTTP (gateway mode only)
 ┌─────────────────────────▼───────────────────────────────┐
 │                     Astrocyte                           │
 │   retain │ recall │ reflect │ forget                    │
@@ -96,38 +92,70 @@ The core of Synapse. Manages session state and runs the deliberation pipeline.
 **Session management** (`council/session.py`):
 - Creates and closes council sessions
 - Tracks participants (agents or LLM models), status, and stage
-- Persists session metadata; full transcripts go to Astrocyte
+- Persists session metadata to PostgreSQL; full transcripts go to Astrocyte
 
 **Orchestrator** (`council/orchestrator.py`):
 - Coordinates the three deliberation stages in sequence
-- Emits SSE events at each stage boundary for streaming frontends
-- Calls `AstrocyteClient.recall()` before Stage 1 to surface relevant precedents
-- Calls `AstrocyteClient.retain()` after Stage 3 to persist the verdict
+- Publishes stage events to Centrifugo after each stage completes — all connected clients receive the event regardless of which backend worker ran the stage
+- Calls `AstrocyteGatewayClient.recall()` before Stage 1 to surface relevant precedents
+- Calls `AstrocyteGatewayClient.retain()` after Stage 3 to persist the verdict
 
 **Stages** (`council/stages/`):
 - `gather.py` — Stage 1: query all council members in parallel via `asyncio.gather`
 - `rank.py` — Stage 2: anonymised peer review; each member ranks the others; aggregate scores computed
 - `synthesise.py` — Stage 3: chairman model synthesises a final verdict given all Stage 1 responses and Stage 2 rankings
 
-### 3.2 AstrocyteClient
+### 3.2 AstrocyteGatewayClient
 
-A thin abstraction that decouples the council engine from Astrocyte's deployment mode.
+A Python module that wraps all Astrocyte operations via HTTP. Synapse connects to Astrocyte exclusively in **Gateway mode** — there is no in-process library mode.
 
 ```python
-class AstrocyteClient(Protocol):
-    async def retain(self, content, bank_id, tags, metadata) -> RetainResult: ...
-    async def recall(self, query, bank_id, max_results) -> list[MemoryHit]: ...
-    async def reflect(self, query, banks) -> ReflectResult: ...
-    async def forget(self, bank_id, memory_ids) -> ForgetResult: ...
+class AstrocyteGatewayClient:
+    async def recall(self, query: str, bank_id: str, context: AstrocyteContext,
+                     max_results: int = 5) -> list[MemoryHit]: ...
+
+    async def retain(self, content: str, bank_id: str, tags: list[str],
+                     context: AstrocyteContext) -> RetainResult: ...
+
+    async def reflect(self, query: str, banks: list[str],
+                      context: AstrocyteContext) -> ReflectResult: ...
+
+    async def forget(self, bank_id: str, memory_ids: list[str],
+                     context: AstrocyteContext) -> ForgetResult: ...
 ```
 
-Two implementations:
-- `LibraryClient` — imports `astrocyte-py` and calls methods in-process (development, single-node)
-- `GatewayClient` — calls `astrocyte-gateway-py` over HTTP (production, multi-tenant)
+Every call receives an `AstrocyteContext` constructed from the validated JWT:
+```python
+context = AstrocyteContext(
+    principal=f"user:{jwt.sub}",
+    tenant_id=jwt.synapse_tenant,
+    role=highest_role(jwt.synapse_roles),
+)
+```
 
-Selected via `SYNAPSE_ASTROCYTE_MODE=library|gateway`. The council engine never branches on this.
+HTTP calls are made via `httpx` (async). The gateway URL and auth token are read from environment config.
 
-### 3.3 MCP Server
+### 3.3 Centrifugo (real-time sidecar)
+
+Centrifugo is a Go binary that manages all persistent client connections — WebSocket for council participants (Modes 1 + 2) and SSE for read-only observers. FastAPI never holds WebSocket connections; it only publishes events.
+
+**Publishing a stage event from Python:**
+```python
+await centrifugo.publish(
+    channel=f"council:{council_id}",
+    data={"type": "stage1_complete", "responses": [...]}
+)
+```
+
+**Client connection flow:**
+1. Client calls `GET /v1/centrifugo/token` — FastAPI returns a short-lived Centrifugo connection JWT
+2. Client connects to Centrifugo directly with the JWT
+3. Client subscribes to `council:{id}` channel
+4. FastAPI publishes events; Centrifugo delivers to all subscribers
+
+Centrifugo provides **presence** (who is connected to a channel) and **history** (reconnecting clients catch up on missed events automatically).
+
+### 3.4 MCP Server
 
 Exposes council primitives as MCP tools for agent-to-agent access. Any MCP-capable client (Claude Code, Cursor, Windsurf) can join councils without additional integration.
 
@@ -138,17 +166,16 @@ Tools:
 - `recall_precedent` — search past council decisions relevant to a query
 - `close_council` — finalise the session and persist the verdict
 
-### 3.4 REST API + real-time endpoints
+### 3.5 REST API
 
-Consumed by web, desktop, and mobile frontends.
+Consumed by web, desktop, and mobile frontends. All API calls go to FastAPI. Real-time events flow via Centrifugo.
 
 | Endpoint | Transport | Purpose |
 |----------|-----------|---------|
 | `POST /v1/councils` | REST | Start a new council |
 | `GET /v1/councils` | REST | List councils |
 | `GET /v1/councils/{id}` | REST | Fetch full council transcript |
-| `GET /v1/councils/{id}/stream` | SSE | Stage progress stream (read-only observers) |
-| `WS /v1/councils/{id}/chat` | WebSocket | Bi-directional chat — Mode 1, Mode 2 (human participant) |
+| `GET /v1/centrifugo/token` | REST | Issue Centrifugo connection JWT for a client |
 | `POST /v1/councils/{id}/chat` | REST | Chat with closed verdict — Mode 3 (`reflect()`) |
 | `GET /v1/memory/search` | REST | Search past council decisions |
 | `GET /v1/templates` | REST | List and fetch council templates |
@@ -156,20 +183,20 @@ Consumed by web, desktop, and mobile frontends.
 | `POST /v1/triggers/{name}` | REST | External webhook trigger for a council |
 | `GET /v1/webhooks` | REST | Webhook registration and delivery logs |
 | `GET /v1/analytics` | REST | Usage, member performance, and consensus metrics |
-| `GET /v1/usage` | REST | Per-tenant usage for quota and billing |
+| `GET /v1/usage` | REST | Per-tenant usage for quota and billing (EE) |
 | `POST /v1/api-keys` | REST | API key management (admin+) |
 | `GET /health` | REST | Health check |
 
-**Transport by chat mode:**
-- Mode 1 (start via chat) — WebSocket; council stream events flow back over the same connection
-- Mode 2 (human-in-the-loop) — WebSocket; user messages and directives (`@redirect`, `@veto`, `@add`) sent inbound; stage events returned outbound
-- Mode 3 (chat with verdict) — REST; stateless request/response via Astrocyte `reflect()`
+**Real-time transport by chat mode:**
+- Mode 1 (start via chat) — client connects to Centrifugo channel `council:{id}`; stage events arrive as Centrifugo messages; human input is sent to FastAPI via REST
+- Mode 2 (human-in-the-loop) — same Centrifugo channel for incoming events; directives (`@redirect`, `@veto`, `@add`) sent to FastAPI via REST
+- Mode 3 (chat with verdict) — pure REST; stateless request/response via Astrocyte `reflect()`
 
-### 3.5 Frontends
+### 3.6 Frontends
 
 Three surfaces, one backend API:
 
-**Svelte web** — primary browser interface. Chat is the primary entry point: users type a question, a council is convened, stages stream back into the chat thread. The same thread supports human-in-the-loop participation (Mode 2) and post-verdict reflection (Mode 3). Memory explorer and admin views sit alongside the chat surface.
+**Svelte web** — primary browser interface. Chat is the primary entry point: users type a question, a council is convened, stages stream back into the chat thread via Centrifugo. The same thread supports human-in-the-loop participation (Mode 2) and post-verdict reflection (Mode 3). Memory explorer and admin views sit alongside the chat surface.
 
 **Flutter desktop** — rich client for deep council observation. Full chat capability plus per-member reasoning traces, ranking matrix, memory graph, MIP routing traces, and observability dashboard. Designed for developers and operators who want depth beyond the web UI.
 
@@ -184,45 +211,53 @@ Three surfaces, one backend API:
 ```
 User (web/desktop) → POST /v1/councils
   → Council Engine: create session
-  → AstrocyteClient.recall(query, bank_id="precedents")
+  → AstrocyteGatewayClient.recall(query, bank_id="precedents")
       → retrieve relevant past decisions
   → Stage 1: gather (parallel LLM queries with precedents in context)
-  → SSE: stage1_complete → frontend renders individual responses
+  → centrifugo.publish(council:{id}, stage1_complete) → clients render responses
   → Stage 2: rank (anonymised peer review, aggregate scores)
-  → SSE: stage2_complete → frontend renders rankings
+  → centrifugo.publish(council:{id}, stage2_complete) → clients render rankings
   → Stage 3: synthesise (chairman produces verdict)
-  → SSE: stage3_complete → frontend renders verdict
-  → AstrocyteClient.retain(verdict, bank_id="councils", tags=[...])
-  → SSE: complete
+  → centrifugo.publish(council:{id}, stage3_complete) → clients render verdict
+  → AstrocyteGatewayClient.retain(verdict, bank_id="councils", tags=[...])
+  → centrifugo.publish(council:{id}, council.closed)
 ```
 
 ### 4.2 Chat flows
 
 **Mode 1 — chat to start:**
 ```
-User message → WS /v1/councils/{id}/chat
+User message → POST /v1/councils (with question)
   → Council Engine: create session
+  → Client subscribes to Centrifugo channel council:{id}
   → Recall precedents from Astrocyte
-  → Run stages (progress events stream back over WS)
-  → Verdict returned into chat thread
+  → Run stages (progress events published to Centrifugo)
+  → Verdict arrives in client's Centrifugo subscription
 ```
 
 **Mode 2 — human-in-the-loop:**
 ```
-User message → WS /v1/councils/{id}/chat (council in progress)
-  → Injected as context for current stage members
+User directive → POST /v1/councils/{id}/directives
   → @redirect → restart current stage with updated question
   → @veto → cancel stage result, await confirmation
-  → @add [member] → summon additional model into session
-  → Stage continues; updated responses stream back over WS
+  → @add [member] → summon additional model into session at next stage boundary
+  → @close → close immediately; current output becomes record
+  → Stage continues; updated events published to Centrifugo
+
+Agent-initiated summon (no human directive required):
+  → council member includes <<summon>> tag in Stage 1 response
+  → orchestrator detects at stage boundary, processes summon
+  → if summon_approval: human → emit summon_requested event → await @approve / @reject
+  → summoned member receives full context, produces response, joins pool
+  → Stage 2 proceeds with expanded member set
 ```
 
 **Mode 3 — chat with verdict:**
 ```
 User message → POST /v1/councils/{id}/chat (council closed)
-  → AstrocyteClient.reflect(query, banks=["councils"], scope=council_id)
-  → Optionally: AstrocyteClient.recall(query, bank_id="precedents")
-  → Synthesised answer + source citations returned
+  → AstrocyteGatewayClient.reflect(query, banks=["councils"], scope=council_id)
+  → Optionally: AstrocyteGatewayClient.recall(query, bank_id="precedents")
+  → Synthesised answer + source citations returned (REST response)
 ```
 
 ### 4.3 Agent access via MCP
@@ -232,18 +267,19 @@ Agent → start_council(question)
   → Council Engine: create session, run stages
   → Returns: session_id, verdict
 Agent → recall_precedent(query)
-  → AstrocyteClient.recall(query, bank_id="precedents")
+  → AstrocyteGatewayClient.recall(query, bank_id="precedents")
   → Returns: ranked memory hits from past councils
 ```
 
-### 4.3 Precedent recall
+### 4.4 Precedent recall
 
 Before every Stage 1 gather, Synapse calls Astrocyte to surface relevant past decisions. These are injected into the council prompt so agents deliberate with institutional memory — not from a blank slate.
 
 ```python
-precedents = await client.recall(
+precedents = await astrocyte.recall(
     query=council_question,
     bank_id="precedents",
+    context=context,
     max_results=5,
 )
 # Injected into Stage 1 system prompt as context
@@ -253,37 +289,61 @@ precedents = await client.recall(
 
 ## 5. Memory bank layout
 
+Three-tier verdict memory, plus per-agent context:
+
 | Bank | Contents | Written by | Read by |
 |------|----------|-----------|--------|
-| `councils` | Full session transcripts (all stages, all responses) | Council Engine (after close) | Admin, desktop UI |
-| `decisions` | Extracted verdicts and rationale | Council Engine | All agents, web UI |
-| `precedents` | Curated high-quality decisions promoted from `decisions` | Admin action | Council Engine (pre-Stage 1), MCP tool |
+| `councils` | Full session transcripts — all stages, all member responses, rankings | Council Engine (after close) | Admin, desktop UI, Mode 3 reflect |
+| `decisions` | Extracted concise verdict + rationale (≤200 words, LLM-summarised) | Council Engine (after close) | All agents, web UI, conflict detection |
+| `precedents` | Curated high-quality decisions promoted from `decisions` | Promotion workflow (human or auto) | Council Engine (pre-Stage 1), MCP `recall_precedent` tool |
 | `agents` | Per-agent context and identity | Agent-scoped | Per-agent only |
+
+**Write pattern after Stage 3:**
+
+```python
+# Full transcript → councils bank (for auditing and Mode 3 reflect)
+await astrocyte.retain(format_full_transcript(session), bank_id="councils", ...)
+
+# Concise verdict → decisions bank (for agent search and conflict detection)
+await astrocyte.retain(format_verdict_summary(session), bank_id="decisions", ...)
+```
+
+**Promotion path:** `decisions` → `precedents`. The promotion workflow (see `workflows.md`) promotes a concise `decisions` entry into `precedents` when confidence is high or a human approves. The full transcript in `councils` is never promoted — it remains the audit record.
 
 MIP routing rules in `mip.yaml` enforce which bank retained content lands in based on content type and tags. Application code does not make routing decisions.
 
 ---
 
-## 6. Astrocyte deployment modes
+## 6. Astrocyte deployment
 
-Synapse supports both Astrocyte deployment modes with no change to council logic.
+Synapse connects to Astrocyte exclusively in **Gateway mode**. Gateway mode is language-agnostic HTTP — the Python backend calls the Astrocyte gateway over HTTP the same way any other language would.
 
-| Mode | `SYNAPSE_ASTROCYTE_MODE` | Transport |
-|------|--------------------------|-----------|
-| Library | `library` | In-process Python call |
-| Gateway | `gateway` | HTTP to `astrocyte-gateway-py` |
+| Config key | Purpose |
+|---|---|
+| `ASTROCYTE_GATEWAY_URL` | Base URL of the running `astrocyte-gateway-py` service |
+| `ASTROCYTE_TOKEN` | Auth token for gateway requests |
 
-In library mode, `astrocyte.yaml` is loaded directly by the Synapse process. In gateway mode, Synapse holds only the gateway URL and auth token; Astrocyte configuration is managed by the gateway deployment.
+Synapse holds no Astrocyte configuration beyond the URL and token. Storage providers, MIP routing rules, and bank policies are managed by the Astrocyte gateway deployment.
 
-Enterprise deployments that route outbound HTTP through a credential gateway or MITM-capable TLS stack configure this in `astrocyte.yaml` under `outbound_transport` — transparent to Synapse.
+**Local development stack** (`docker-compose.yml`):
+```
+synapse-backend   (FastAPI, port 8000)
+centrifugo        (Go, port 8001 WS / port 8000 API)
+astrocyte-gateway (Python, port 8002)
+postgres          (PostgreSQL + pgvector, port 5432)
+```
+
+All four services start together with `docker compose up`.
 
 ---
 
 ## 7. Authentication and authorisation
 
-**AuthN** — Synapse validates JWT tokens (RS256) from the configured OIDC provider. The JWT subject and claims are mapped to an `AstrocyteContext` (principal, actor, tenant) and passed to all Astrocyte calls for per-bank access control enforcement.
+**AuthN** — Synapse validates JWT tokens (RS256) from the configured OIDC provider via `python-jose`. The JWT subject and claims are mapped to an `AstrocyteContext` (principal, tenant_id, role) and passed to all Astrocyte calls for per-bank access control enforcement.
 
 **AuthZ** — enforced by Astrocyte per bank. Synapse does not duplicate access control logic; it passes identity through.
+
+**Centrifugo auth** — clients obtain a short-lived Centrifugo connection JWT from `GET /v1/centrifugo/token` after authenticating with Synapse. The JWT is signed with `CENTRIFUGO_TOKEN_SECRET` and carries the user ID and allowed channels.
 
 MCP access uses API key auth with per-key bank scoping. Agent identities appear as `agent:{name}` principals in Astrocyte audit logs.
 
@@ -292,7 +352,7 @@ MCP access uses API key auth with per-key bank scoping. Agent identities appear 
 ## Further reading
 
 - [Council engine](council-engine.md) — deliberation stages in detail, anonymisation strategy, chairman selection
-- [Chat](chat.md) — three chat modes, human-in-the-loop directives, WebSocket, Mode 3 reflect
+- [Chat](chat.md) — three chat modes, human-in-the-loop directives, Centrifugo, Mode 3 reflect
 - [Deliberation](deliberation.md) — multi-round cycles, red team mode, verdict metadata schema
 - [Templates](templates.md) — built-in templates, custom templates, inheritance
 - [Workflows](workflows.md) — decision lifecycle state machine, conflict detection, approval chains
@@ -302,8 +362,8 @@ MCP access uses API key auth with per-key bank scoping. Agent identities appear 
 - [Webhooks](webhooks.md) — outbound events, HMAC signing, export integrations
 - [SDK](sdk.md) — synapse-py and synapse-ts client libraries
 - [Notifications](notifications.md) — email notifications, weekly digest, per-user preferences
-- [Multi-tenancy](multi-tenancy.md) — tenant isolation, quotas, Stripe billing
+- [Multi-tenancy](multi-tenancy.md) — tenant isolation, quotas, Stripe billing (EE)
 - [Integrations](integrations.md) — Slack, Teams, Lark bots; event bus; webhook registration
-- [Tech stack](tech-stack.md) — why FastAPI, Flutter, Svelte, and the library/gateway split
+- [Tech stack](tech-stack.md) — technology decisions and rationale
 - [Project structure](project-structure.md) — monorepo layout, package conventions, build tooling
 - [ADRs](adr/) — recorded architectural decisions

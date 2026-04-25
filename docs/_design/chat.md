@@ -78,7 +78,9 @@ Synapse: Injecting context for remaining members …
 | `@redirect` | Restarts the current stage with the human's message as an updated question |
 | `@veto` | Cancels the current stage result; requests human confirmation before re-running |
 | `@close` | Closes the council immediately; the current stage output becomes the record |
-| `@add [member]` | Summons an additional model or agent into the council mid-session |
+| `@add [member]` | Summons an additional model or agent into the council. The summoned member receives full session context (question, precedents, Stage 1 responses so far) and joins the deliberation at the current stage boundary. |
+
+**Agent-initiated summons** — council members can also request summons autonomously by including a `<<summon>>` tag in their Stage 1 response. The summon surfaces in the chat thread as a `summon_requested` entry. If `summon_approval: human` is configured, the human is prompted to approve or reject before the new member joins. If `summon_approval: auto`, it is handled silently and the `member_summoned` entry appears in the thread. See `council-engine.md` section 10 for the full summon design.
 
 **Backend requirement — WebSocket:**
 
@@ -174,7 +176,9 @@ thread entry types:
   verdict             Stage 3 output (prominent)
   reflection          Mode 3 answer with sources
   precedent_hit       related past decision surfaced
-  system_event        @redirect, @veto, member added, etc.
+  summon_requested    agent or chairman requested a specialist (pending approval)
+  member_summoned     new member joined and contributed their response
+  system_event        @redirect, @veto, @add, @close, summon cap reached, etc.
 ```
 
 Stage progress and member responses are **collapsible** by default — the thread stays readable as a conversation while full detail is one click away.

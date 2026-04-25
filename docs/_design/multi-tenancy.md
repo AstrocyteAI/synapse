@@ -36,11 +36,11 @@ Tenant (org/workspace)
 
 Every Astrocyte call from Synapse includes a `tenant_id` in the `AstrocyteContext`. Astrocyte enforces bank-level isolation — a query from `tenant_acme` cannot access banks belonging to `tenant_beta`.
 
-```python
-context = AstrocyteContext(
-    principal=f"user:{user_id}",
-    tenant_id=jwt.synapse_tenant,   # enforces isolation at memory layer
-)
+```elixir
+context = %AstrocyteContext{
+  principal: "user:#{user_id}",
+  tenant_id: jwt.synapse_tenant   # enforces isolation at memory layer
+}
 ```
 
 Bank naming convention in multi-tenant mode: `{tenant_id}:councils`, `{tenant_id}:precedents`, etc.
@@ -88,7 +88,7 @@ GET /v1/usage
   }
 ```
 
-Usage data is refreshed every hour. Real-time usage (for quota checks) uses a fast Redis counter.
+Usage data is refreshed every hour. Real-time quota checks use [`limits`](https://limits.readthedocs.io/) — a Python rate-limiting library backed by in-memory storage (single-node) or Redis (multi-node). The same Redis instance used by ARQ serves as the quota counter backend.
 
 ---
 
@@ -111,9 +111,9 @@ Quotas prevent runaway usage and enable fair resource allocation across tenants.
 
 Quotas are checked before council creation and before each API request:
 
-```python
-await quota_service.check(tenant_id, "councils_per_day")
-# Raises QuotaExceededError if limit reached
+```elixir
+:ok = Quotas.check!(tenant_id, :councils_per_day)
+# raises QuotaExceededError if limit reached
 ```
 
 Quota checks use Redis atomic counters with TTL-based reset (daily quotas reset at midnight UTC).
@@ -164,15 +164,15 @@ billing:
 
 LLM token consumption above plan thresholds is billed as overage at the end of each billing period. Usage snapshots are sent to Stripe as `usage_records` on a daily meter.
 
-```python
-stripe.billing.meter_events.create(
-    event_name="synapse_llm_tokens",
-    payload={
-        "stripe_customer_id": tenant.stripe_customer_id,
-        "value": daily_token_count,
-    },
-    timestamp=end_of_day_unix,
-)
+```elixir
+Stripe.BillingMeterEvent.create(%{
+  event_name: "synapse_llm_tokens",
+  payload: %{
+    stripe_customer_id: tenant.stripe_customer_id,
+    value: daily_token_count
+  },
+  timestamp: end_of_day_unix
+})
 ```
 
 ### 6.3 Stripe webhook events handled

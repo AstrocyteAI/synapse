@@ -85,6 +85,21 @@ Synapse connects to Astrocyte in one of two modes, selected by configuration:
 
 The council engine is identical in both modes. Only the `AstrocyteClient` transport changes.
 
+## License
+
+Synapse is open source under the [Apache License 2.0](LICENSE).
+
+All content under any `ee/` directory is licensed under the [Synapse Enterprise Edition License](apps/backend/ee/LICENSE) — proprietary, requires a Cerebro subscription for production use. Development and testing use is permitted without a subscription.
+
+| Directory | License |
+|---|---|
+| Everything outside `ee/` | Apache 2.0 |
+| `apps/backend/ee/` | Synapse EE License (proprietary) |
+
+Enterprise features (multi-tenancy, SAML SSO, compliance audit trails, DSAR automation) are unlocked by setting `SYNAPSE_LICENSE_KEY` on your self-hosted instance. Contact [odeoncg.ai](https://odeoncg.ai) for a license key.
+
+---
+
 ## Further reading
 
 - [Architecture](docs/_design/architecture.md) — layer boundaries, component responsibilities, data flow

@@ -42,15 +42,33 @@ Before a verdict is retained to Astrocyte, Synapse checks whether it contradicts
 
 ```python
 # After Stage 3 closes:
-precedents = await client.recall(
-    query=verdict_text,
-    bank_id="precedents",
-    max_results=5,
-)
-conflicts = detect_conflicts(verdict_text, precedents)
+precedents = await astrocyte.recall(verdict_text, bank_id="precedents", context=context)
+conflicts = await detect_conflicts(verdict_text, precedents)
 ```
 
-`detect_conflicts()` uses an LLM to assess whether the new verdict and any recalled precedent are semantically contradictory — not merely different topics.
+`detect_conflicts()` uses a two-step approach:
+
+1. **Semantic recall** — `astrocyte.recall()` returns the top-N precedents most semantically similar to the new verdict (cosine similarity over embeddings). This is fast and cheap.
+2. **LLM contradiction check** — for each recalled precedent above a similarity threshold (default `0.7`), a lightweight LLM call evaluates whether the two verdicts are *contradictory* (opposite recommendations on the same question) rather than merely *related* (same topic, compatible conclusions). The prompt is structured for binary + confidence output:
+
+```python
+CONFLICT_CHECK_PROMPT = """
+Verdict A: {new_verdict}
+Verdict B: {precedent_verdict}
+
+Do these verdicts make contradictory recommendations on the same decision?
+Answer: CONTRADICTS | COMPATIBLE | UNRELATED
+Confidence: HIGH | MEDIUM | LOW
+Explanation: <one sentence>
+"""
+```
+
+Mapping to conflict state:
+- `CONTRADICTS` + `HIGH` → `conflict`
+- `CONTRADICTS` + `MEDIUM` or `LOW` → `potential_conflict`
+- `COMPATIBLE` or `UNRELATED` → `no_conflict`
+
+Only precedents above the similarity threshold are checked against the LLM — unrelated precedents are filtered at the recall step, keeping LLM calls to a minimum.
 
 **Conflict states:**
 
@@ -188,16 +206,17 @@ Each step is a full council session. All sessions in a chain are linked by `chai
 
 ### Promotion
 
-A verdict in the `councils` bank is promoted to `precedents` when:
+A verdict in the `decisions` bank is promoted to `precedents` when:
 - A human approver explicitly approves it
-- Auto-promotion threshold is met
+- Auto-promotion threshold is met (`confidence_label: high` and `consensus_score ≥ 0.8`)
 - An admin promotes it manually via API or UI
 
-Promotion retains the full verdict in `councils` and creates a curated entry in `precedents` with:
-- Distilled verdict text (LLM-summarised to ≤200 words)
-- Tags and topic classification
+Promotion copies the `decisions` entry into `precedents` and enriches it with:
+- Tags and topic classification (refined at promotion time)
 - Promoted by / promoted at metadata
-- Link back to the full council session
+- Link back to the full council session in the `councils` bank
+
+The full transcript in `councils` is never promoted — it remains the unmodified audit record. The concise summary in `decisions` is what agents search and what becomes a precedent.
 
 ### Demotion
 

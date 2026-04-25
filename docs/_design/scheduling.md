@@ -151,13 +151,21 @@ triggers:
 
 ## 5. Backend implementation
 
-**Scheduler:** APScheduler (`apscheduler`) running inside the FastAPI process for simple deployments; Celery Beat for production deployments with Redis as the broker.
+**Scheduler:** [APScheduler](https://apscheduler.readthedocs.io/) — in-process async scheduler running inside the FastAPI lifespan. Scheduled councils are `DateTrigger` jobs; recurring councils are `CronTrigger` jobs. APScheduler persists job state to PostgreSQL so scheduled firings survive restarts.
 
-**Recurring schedule storage:** stored in the `schedules` table (PostgreSQL) alongside the council database, not in Astrocyte (operational data, not memory).
+**Recurring schedule storage:** stored in the `schedules` table (PostgreSQL) via SQLAlchemy, alongside the council database. Operational data, not Astrocyte memory.
 
-**Trigger authentication:** HMAC-SHA256 signature on the request body using a per-trigger secret. Same pattern as GitHub webhooks.
+**Trigger authentication:** HMAC-SHA256 signature on the request body using a per-trigger secret, verified via Python's `hmac` stdlib. Same pattern as GitHub webhooks.
 
-**Missed firings:** if Synapse is down when a recurring council should have fired, the next startup checks for missed schedules and fires them immediately (configurable: skip missed firings or fire on restart).
+```python
+import hmac, hashlib
+
+def verify_trigger_signature(body: bytes, secret: str, signature: str) -> bool:
+    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(f"sha256={expected}", signature)
+```
+
+**Missed firings:** APScheduler's `misfire_grace_time` setting controls tolerance for late firings. If Synapse is down when a firing was due, the job either runs on next startup (within grace time) or is discarded (configurable per schedule).
 
 ---
 
@@ -166,11 +174,9 @@ triggers:
 ```
 apps/backend/synapse/
 └── scheduling/
-    ├── __init__.py
-    ├── scheduler.py        # APScheduler / Celery Beat integration
-    ├── recurring.py        # Recurring council management
-    ├── triggers.py         # Trigger endpoint handler + HMAC verification
-    └── models.py           # Schedule and Trigger Pydantic models
+    ├── worker.py           # APScheduler job functions — fire scheduled and recurring councils
+    ├── recurring.py        # Recurring council management (create, update, pause, resume)
+    └── triggers.py         # Trigger endpoint handler + HMAC verification
 ```
 
 New API routes:

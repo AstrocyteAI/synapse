@@ -1,0 +1,70 @@
+Synapse Enterprise Edition License
+
+Copyright (c) 2026 Odeon Consulting Group (odeoncg.ai)
+
+All rights reserved.
+
+This software and associated documentation files (the "Software") constitute
+proprietary and confidential information of Odeon Consulting Group. The Software
+is licensed, not sold.
+
+GRANT OF LICENSE
+
+Subject to the terms of a valid Synapse Enterprise subscription agreement with
+Odeon Consulting Group, you are granted a limited, non-exclusive,
+non-transferable, non-sublicensable license to:
+
+  1. Use the Software solely for your internal business purposes on the number
+     of seats covered by your subscription.
+
+  2. Modify the Software solely for the purpose of patching or customising it
+     for your own internal use. Any such modifications remain subject to this
+     license and may not be distributed.
+
+DEVELOPMENT AND TESTING
+
+You may copy and modify the Software for development and testing purposes
+without a paid subscription, provided that the Software is not used in
+production and no fees are charged to end users.
+
+RESTRICTIONS
+
+Except as expressly permitted above, you may not:
+
+  - Copy, merge, publish, distribute, sublicense, or sell the Software or
+    any portion of it.
+  - Remove or alter any proprietary notices, labels, or marks on the Software.
+  - Use the Software to build a product or service that competes with
+    Synapse or Cerebro.
+  - Grant any third party access to the Software other than as permitted
+    under your subscription.
+
+TERMINATION
+
+This license terminates automatically upon expiry or termination of your
+Synapse Enterprise subscription. On termination, you must cease all use of
+the Software and destroy all copies in your possession.
+
+DISCLAIMER OF WARRANTIES
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED. ODEON CONSULTING GROUP MAKES NO WARRANTIES, EXPRESS OR IMPLIED,
+INCLUDING WITHOUT LIMITATION ANY WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
+
+LIMITATION OF LIABILITY
+
+IN NO EVENT SHALL ODEON CONSULTING GROUP BE LIABLE FOR ANY INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR
+IN CONNECTION WITH THIS LICENSE OR THE USE OF THE SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGES.
+
+GOVERNING LAW
+
+This license is governed by the laws of Singapore, without regard to its
+conflict of law provisions.
+
+---
+
+For licensing enquiries: legal@odeoncg.ai
+For subscription information: https://cerebro.odeoncg.ai

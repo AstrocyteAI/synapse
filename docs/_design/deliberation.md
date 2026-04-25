@@ -44,11 +44,19 @@ POST /v1/councils
 }
 ```
 
-### 1.2 Convergence threshold
+### 1.2 Convergence threshold and early stopping
 
 If the aggregate consensus score (see section 3) exceeds `convergence_threshold` at the end of any round, deliberation stops early regardless of `max_rounds`. This prevents unnecessary rounds when members already agree.
 
-### 1.3 Divergence detection
+**Default:** `convergence_threshold: 0.85`. This corresponds to "high consensus" (≥ 0.8) with some headroom. Lowering it (e.g. `0.70`) stops earlier but risks premature closure on contentious questions. Raising it (e.g. `0.95`) forces more rounds but produces higher-confidence verdicts — appropriate for irreversible decisions.
+
+**UX:** when early stopping triggers, the verdict carries a `converged_early: true` flag. The UI displays "Converged after N rounds" rather than showing the configured `max_rounds`. This makes it clear the council didn't terminate unexpectedly.
+
+### 1.3 Summoned members in multi-round deliberation
+
+Members summoned during round 1 (via `@add`, agent `<<summon>>` tag, or chairman summon) become full session members and participate in all subsequent rounds automatically. Their round 1 response is included in every subsequent round's context alongside original members — there is no re-summoning. This means a round 2 that begins with a summoned domain specialist present benefits from that specialist's critique of the draft verdict.
+
+### 1.4 Divergence detection
 
 If consensus score *decreases* between rounds (members diverging rather than converging), the orchestrator flags this and optionally halts:
 
@@ -57,9 +65,11 @@ multi_round:
   on_divergence: warn      # warn | halt | continue
 ```
 
-`warn` — adds a `divergence_detected: true` flag to the verdict metadata and continues.
-`halt` — closes the session after the current round and surfaces the divergence to the user.
-`continue` — ignores divergence and runs all configured rounds.
+`warn` — adds a `divergence_detected: true` flag to the verdict metadata and continues. **Default.** Suitable for exploratory or advisory councils where surfacing disagreement is itself useful.
+`halt` — closes the session after the current round and surfaces the divergence to the human. Best for high-stakes decisions where a split verdict should not be auto-retained.
+`continue` — ignores divergence and runs all configured rounds. Use only when you want the full round history regardless of trajectory.
+
+**Divergence threshold:** a score *decrease* of more than `0.05` between consecutive rounds triggers the divergence flag. Noise-level fluctuations (< 0.05) are ignored.
 
 ---
 
