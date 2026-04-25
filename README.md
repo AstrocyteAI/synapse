@@ -2,14 +2,14 @@
 
 **A new kind of chat for the AI age — humans and agents, thinking and acting together.**
 
-Synapse is built on [Astrocyte](../astrocyte). It orchestrates councils of AI agents to reason collectively, retains their decisions in governed memory, and lets future councils recall what was previously decided.
+Synapse is a group chat platform where humans and AI agents participate as first-class members — talking, deliberating, and taking action together. Built on [Astrocyte](../astrocyte), it retains every decision in governed memory so future sessions can recall what was previously decided.
 
 The name is deliberate: in neuroscience, a synapse is the connection point between neurons where computation happens. Astrocytes mediate and maintain the environment around those synapses. Synapse is the deliberation layer that Astrocyte makes possible.
 
 ```
-Agent A ──┐
-Agent B ──┼──→ Synapse Council Engine ──→ Verdict + rationale
-Agent C ──┘          │
+Human ────┐
+Agent A ──┼──→ Synapse Council Engine ──→ Verdict + action
+Agent B ──┘          │
                       │  retain / recall
                       ▼
                   Astrocyte
