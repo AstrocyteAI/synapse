@@ -11,5 +11,15 @@ docs/src/content/docs/developer/
 # Claude Code
 .claude/
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+.pytest_cache/
+.ruff_cache/
+
 # OS
 .DS_Store

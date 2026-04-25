@@ -12,7 +12,7 @@ from synapse.config import get_settings
 from synapse.db.session import create_engine_and_sessionmaker
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
-from synapse.routers import councils, centrifugo_router
+from synapse.routers import councils, centrifugo_router, threads
 
 
 @asynccontextmanager
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(councils.router, prefix="/v1")
+    app.include_router(threads.router, prefix="/v1")
     app.include_router(centrifugo_router.router, prefix="/v1")
 
     @app.get("/health")

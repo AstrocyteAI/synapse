@@ -1,4 +1,4 @@
-"""Councils router — CRUD + SSE stream for real-time updates."""
+"""Councils router — CRUD, SSE stream, thread link, and Mode 3 chat."""
 
 from __future__ import annotations
 
@@ -10,19 +10,25 @@ from typing import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.council.models import (
     CouncilMember,
-    CouncilResult,
     CreateCouncilRequest,
 )
 from synapse.council.orchestrator import CouncilOrchestrator
 from synapse.council.session import create_session, get_session, list_sessions, mark_failed
-from synapse.db.models import CouncilStatus
+from synapse.council.thread import (
+    append_event,
+    create_thread,
+    get_thread_by_council,
+)
+from synapse.db.models import CouncilStatus, ThreadEventType
 from synapse.db.session import get_session as get_db_session
 from synapse.llm.client import LLMClient
+from synapse.memory.banks import Banks
 from synapse.memory.context import build_context
 
 _logger = logging.getLogger(__name__)
@@ -91,6 +97,28 @@ async def create_council(
     )
     session_id = council_session.id
 
+    # Create the thread that backs this council's chat surface
+    thread = await create_thread(
+        db,
+        council_id=session_id,
+        created_by=user.principal,
+        tenant_id=user.tenant_id,
+        title=body.question[:120],
+    )
+
+    # Append the council_started event so the thread has a clear origin marker
+    await append_event(
+        db,
+        thread_id=thread.id,
+        event_type=ThreadEventType.council_started,
+        actor_id="system",
+        metadata={
+            "council_id": str(session_id),
+            "question": body.question,
+            "member_count": len(members),
+        },
+    )
+
     orchestrator = _get_orchestrator(request)
     context = build_context(user)
 
@@ -115,7 +143,11 @@ async def create_council(
     # Fire and forget — client polls or listens via Centrifugo/SSE
     asyncio.create_task(_run())
 
-    return {"session_id": str(session_id), "status": CouncilStatus.pending}
+    return {
+        "session_id": str(session_id),
+        "thread_id": str(thread.id),
+        "status": CouncilStatus.pending,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +194,110 @@ async def get_council(
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
     return _session_detail(session)
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/councils/{session_id}/thread
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/councils/{session_id}/thread",
+    summary="Get the thread ID for a council session",
+)
+async def get_council_thread(
+    session_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    session = await get_session(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Council session not found")
+    _assert_owns(session, user)
+
+    thread = await get_thread_by_council(db, session_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found for this council")
+
+    return {"session_id": str(session_id), "thread_id": str(thread.id)}
+
+
+# ---------------------------------------------------------------------------
+# POST /v1/councils/{session_id}/chat  — Mode 3: chat with closed verdict
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    message: str
+
+
+@router.post(
+    "/councils/{session_id}/chat",
+    summary="Chat with a closed council verdict (Mode 3 — powered by Astrocyte reflect)",
+)
+async def chat_with_verdict(
+    session_id: uuid.UUID,
+    body: ChatRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    session = await get_session(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Council session not found")
+    _assert_owns(session, user)
+    if session.status != CouncilStatus.closed:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Council is not closed (status: {session.status}). Mode 3 chat requires a closed council.",
+        )
+
+    context = build_context(user)
+    astrocyte = request.app.state.astrocyte
+
+    # Reflect on the councils bank scoped to this session
+    reflect_result = await astrocyte.reflect(
+        query=body.message,
+        bank_id=Banks.COUNCILS,
+        context=context,
+    )
+
+    # Append the user message and reflection to the thread
+    thread = await get_thread_by_council(db, session_id)
+    if thread:
+        await append_event(
+            db,
+            thread_id=thread.id,
+            event_type=ThreadEventType.user_message,
+            actor_id=user.principal,
+            actor_name=user.raw_claims.get("name") or user.sub,
+            content=body.message,
+        )
+        await append_event(
+            db,
+            thread_id=thread.id,
+            event_type=ThreadEventType.reflection,
+            actor_id="system",
+            content=reflect_result.answer,
+            metadata={"sources": reflect_result.sources},
+        )
+
+    # Retain the Q&A exchange to the councils bank so future councils can recall it
+    asyncio.create_task(
+        _retain_reflection(
+            astrocyte=astrocyte,
+            council_id=str(session_id),
+            question=body.message,
+            answer=reflect_result.answer,
+            sources=reflect_result.sources,
+            context=context,
+        )
+    )
+
+    return {
+        "answer": reflect_result.answer,
+        "sources": reflect_result.sources,
+        "session_id": str(session_id),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -220,8 +356,33 @@ async def stream_council(
 # Private helpers
 # ---------------------------------------------------------------------------
 
+async def _retain_reflection(
+    astrocyte,
+    council_id: str,
+    question: str,
+    answer: str,
+    sources: list,
+    context,
+) -> None:
+    """Retain a Mode 3 Q&A exchange to the councils bank. Fire-and-forget."""
+    try:
+        content = (
+            f"Mode 3 Q&A — Council {council_id}\n\n"
+            f"Q: {question}\n\n"
+            f"A: {answer}"
+        )
+        await astrocyte.retain(
+            content=content,
+            bank_id=Banks.COUNCILS,
+            tags=["reflection", council_id],
+            context=context,
+            metadata={"council_id": council_id, "type": "reflection"},
+        )
+    except Exception as exc:
+        _logger.error("Failed to retain reflection for council %s: %s", council_id, exc)
+
+
 def _assert_owns(session, user: AuthenticatedUser) -> None:
-    # Admins can see all; otherwise enforce tenant + principal
     if "admin" in (user.roles or []):
         return
     if user.tenant_id and session.tenant_id != user.tenant_id:
