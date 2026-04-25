@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from synapse.council.models import StageOneResponse
 
 
-_PUNCT = str.maketrans("", "", ".,;:!?\"'()[]{}'"  )
+_PUNCT = str.maketrans("", "", ".,;:!?\"'()[]{}'")
 
 
 def _word_set(text: str) -> set[str]:

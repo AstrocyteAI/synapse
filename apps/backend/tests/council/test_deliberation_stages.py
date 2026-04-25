@@ -25,7 +25,9 @@ def _resp(member_id: str, content: str = "some content") -> StageOneResponse:
 
 
 def _critique(member_id: str, critique: str = "good points", error=None) -> MemberCritique:
-    return MemberCritique(member_id=member_id, member_name=member_id, critique=critique, error=error)
+    return MemberCritique(
+        member_id=member_id, member_name=member_id, critique=critique, error=error
+    )
 
 
 # ---------------------------------------------------------------------------

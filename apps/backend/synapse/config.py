@@ -52,8 +52,8 @@ class Settings(BaseSettings):
 
     # --- Multi-round deliberation (B5) ---
     deliberation_enabled: bool = True
-    max_deliberation_rounds: int = 2      # critique→revise cycles before forced stop
-    convergence_threshold: float = 0.72   # Jaccard similarity; stop early if reached
+    max_deliberation_rounds: int = 2  # critique→revise cycles before forced stop
+    convergence_threshold: float = 0.72  # Jaccard similarity; stop early if reached
     critique_timeout_seconds: int = 60
     revise_timeout_seconds: int = 60
 

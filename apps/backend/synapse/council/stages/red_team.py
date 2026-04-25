@@ -105,7 +105,5 @@ async def run_red_team(
     timeout: float = 60.0,
 ) -> list[MemberCritique]:
     """Each red-team member attacks the other members' Stage 1 proposals in parallel."""
-    tasks = [
-        _attack_member(m, question, stage1_responses, llm, timeout) for m in members
-    ]
+    tasks = [_attack_member(m, question, stage1_responses, llm, timeout) for m in members]
     return list(await asyncio.gather(*tasks))

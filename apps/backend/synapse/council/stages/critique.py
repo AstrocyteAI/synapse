@@ -104,7 +104,5 @@ async def run_critique(
     timeout: float = 60.0,
 ) -> list[MemberCritique]:
     """Each member critiques the other members' current responses in parallel."""
-    tasks = [
-        _critique_member(m, question, current_responses, llm, timeout) for m in members
-    ]
+    tasks = [_critique_member(m, question, current_responses, llm, timeout) for m in members]
     return list(await asyncio.gather(*tasks))

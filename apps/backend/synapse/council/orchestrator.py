@@ -141,18 +141,22 @@ class CouncilOrchestrator:
                 llm=self._llm,
                 timeout=self._settings.critique_timeout_seconds,
             )
-            deliberation_rounds.append({
-                "round": 1,
-                "mode": "red_team",
-                "attacks": [a.model_dump() for a in attacks],
-                "converged": False,
-            })
-            await publish("red_team_complete", {
-                "attacks": [
-                    {"member_id": a.member_id, "member_name": a.member_name}
-                    for a in attacks
-                ],
-            })
+            deliberation_rounds.append(
+                {
+                    "round": 1,
+                    "mode": "red_team",
+                    "attacks": [a.model_dump() for a in attacks],
+                    "converged": False,
+                }
+            )
+            await publish(
+                "red_team_complete",
+                {
+                    "attacks": [
+                        {"member_id": a.member_id, "member_name": a.member_name} for a in attacks
+                    ],
+                },
+            )
 
         elif do_deliberation:
             max_rounds = self._settings.max_deliberation_rounds
@@ -183,24 +187,27 @@ class CouncilOrchestrator:
                 converged = check_convergence(current_responses, revised, threshold)
                 current_responses = revised
 
-                deliberation_rounds.append({
-                    "round": round_num,
-                    "mode": "deliberation",
-                    "critiques": [c.model_dump() for c in critiques],
-                    "revised_responses": [r.model_dump() for r in revised],
-                    "converged": converged,
-                })
+                deliberation_rounds.append(
+                    {
+                        "round": round_num,
+                        "mode": "deliberation",
+                        "critiques": [c.model_dump() for c in critiques],
+                        "revised_responses": [r.model_dump() for r in revised],
+                        "converged": converged,
+                    }
+                )
 
-                await publish("deliberation_round_complete", {
-                    "round": round_num,
-                    "converged": converged,
-                    "revised_count": len(revised),
-                })
+                await publish(
+                    "deliberation_round_complete",
+                    {
+                        "round": round_num,
+                        "converged": converged,
+                        "revised_count": len(revised),
+                    },
+                )
 
                 if converged:
-                    _logger.info(
-                        "Council %s converged after round %d", council_id, round_num
-                    )
+                    _logger.info("Council %s converged after round %d", council_id, round_num)
                     break
 
         # Use the latest (possibly revised) responses for ranking
@@ -321,8 +328,7 @@ class CouncilOrchestrator:
                 DeliberationRound(
                     round=rd["round"],
                     critiques=[
-                        MemberCritique(**c)
-                        for c in rd.get("critiques", rd.get("attacks", []))
+                        MemberCritique(**c) for c in rd.get("critiques", rd.get("attacks", []))
                     ],
                     revised_responses=[
                         StageOneResponse(**r) for r in rd.get("revised_responses", [])
