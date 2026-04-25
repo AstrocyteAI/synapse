@@ -3,6 +3,7 @@ import type {
 	CouncilDetail,
 	CouncilSummary,
 	CreateCouncilResponse,
+	MemorySearchResponse,
 	Template,
 	ThreadEventsResponse
 } from './types';
@@ -120,6 +121,19 @@ export async function chatWithVerdict(
 
 export async function listTemplates(): Promise<Template[]> {
 	return request('/v1/templates');
+}
+
+// ---------------------------------------------------------------------------
+// Memory
+// ---------------------------------------------------------------------------
+
+export async function searchMemory(
+	q: string,
+	bank: 'decisions' | 'precedents' | 'councils' = 'decisions',
+	limit = 10
+): Promise<MemorySearchResponse> {
+	const params = new URLSearchParams({ q, bank, limit: String(limit) });
+	return request(`/v1/memory/search?${params}`);
 }
 
 // ---------------------------------------------------------------------------

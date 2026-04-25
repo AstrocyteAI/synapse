@@ -77,6 +77,22 @@ export interface ChatWithVerdictResponse {
 	session_id: string;
 }
 
+export interface MemoryHit {
+	memory_id: string;
+	content: string;
+	score: number;
+	bank_id: string;
+	tags: string[];
+	metadata: Record<string, unknown>;
+}
+
+export interface MemorySearchResponse {
+	query: string;
+	bank: string;
+	count: number;
+	hits: MemoryHit[];
+}
+
 export type CouncilStatus =
 	| 'pending'
 	| 'stage_1'
