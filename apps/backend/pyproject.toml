@@ -26,6 +26,8 @@ dependencies = [
     "litellm>=1.52",
     # SSE streaming
     "sse-starlette>=2.1",
+    # MCP server (agent-to-agent access)
+    "mcp>=1.0",
 ]
 
 [project.optional-dependencies]

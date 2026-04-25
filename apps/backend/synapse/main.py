@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from synapse.config import get_settings
 from synapse.db.session import create_engine_and_sessionmaker
+from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
 from synapse.routers import centrifugo_router, councils, threads
@@ -64,6 +65,10 @@ def create_app() -> FastAPI:
     app.include_router(councils.router, prefix="/v1")
     app.include_router(threads.router, prefix="/v1")
     app.include_router(centrifugo_router.router, prefix="/v1")
+
+    # MCP server — agent-to-agent access via Streamable HTTP transport
+    # Tools: start_council, join, contribute, recall_precedent, close
+    app.mount("/mcp", mcp_server.streamable_http_app())
 
     @app.get("/health")
     async def health() -> dict:

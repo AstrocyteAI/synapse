@@ -79,3 +79,27 @@ async def mark_failed(
         if error:
             session.config = {**session.config, "_error": error}
         await db.commit()
+
+
+async def close_session(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    *,
+    verdict: str | None = None,
+) -> CouncilSession | None:
+    """Close a session immediately with an optional verdict.
+
+    Used by the MCP ``close`` tool when an agent wants to terminate an
+    in-progress council and accept whatever deliberation has occurred so far.
+    If the orchestrator finishes later it will overwrite the status — that is
+    acceptable because a fully-synthesised verdict supersedes an early close.
+    """
+    session = await db.get(CouncilSession, session_id)
+    if session and session.status not in (CouncilStatus.closed, CouncilStatus.failed):
+        session.status = CouncilStatus.closed
+        session.closed_at = datetime.now(UTC)
+        if verdict:
+            session.verdict = verdict
+        await db.commit()
+        await db.refresh(session)
+    return session
