@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from synapse.config import get_settings
 from synapse.db.session import create_engine_and_sessionmaker
+from synapse.ee_hooks import NullFeatureFlags
 from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
@@ -30,6 +31,22 @@ from synapse.scheduling.runner import ScheduledCouncilRunner, restore_from_db
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
+
+    # --- EE license ---
+    try:
+        from ee.license.feature_flags import FeatureFlags
+        from ee.license.license_service import LicenseService
+
+        license_service = LicenseService(
+            license_key_offline=settings.synapse_license_key_offline,
+            license_key_online=settings.synapse_license_key or None,
+            license_server_url=settings.synapse_license_server_url,
+        )
+        app.state.license_service = license_service
+        app.state.feature_flags = FeatureFlags(license_service)
+    except ImportError:
+        app.state.license_service = None
+        app.state.feature_flags = NullFeatureFlags()
 
     # Shared async HTTP client — one connection pool for the process lifetime
     http_client = httpx.AsyncClient(timeout=120.0)
@@ -56,8 +73,14 @@ async def lifespan(app: FastAPI):
     app.state.scheduler = scheduler
     await restore_from_db(app)
 
+    # Start license service after http_client is available
+    if app.state.license_service is not None:
+        await app.state.license_service.start(app)
+
     yield
 
+    if app.state.license_service is not None:
+        await app.state.license_service.stop()
     await scheduler.shutdown()
     await http_client.aclose()
     await engine.dispose()

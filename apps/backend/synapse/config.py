@@ -58,7 +58,9 @@ class Settings(BaseSettings):
     revise_timeout_seconds: int = 60
 
     # --- EE ---
-    synapse_license_key: str = ""
+    synapse_license_key: str | None = None
+    synapse_license_key_offline: str | None = None
+    synapse_license_server_url: str = "https://cerebro.odeoncg.ai"
 
 
 @lru_cache(maxsize=1)

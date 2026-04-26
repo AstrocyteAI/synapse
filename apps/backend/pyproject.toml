@@ -29,6 +29,7 @@ dependencies = [
     # MCP server (agent-to-agent access)
     "mcp>=1.0",
     "pyyaml>=6.0.3",
+    "dilithium-py>=1.4.0",
 ]
 
 [project.optional-dependencies]

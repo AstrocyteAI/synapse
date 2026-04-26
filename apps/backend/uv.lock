@@ -501,6 +501,15 @@ wheels = [
 ]
 
 [[package]]
+name = "dilithium-py"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/54/76bcb128610f7587695adb802304710b587ce60b71951b455269b12b8e55/dilithium_py-1.4.0.tar.gz", hash = "sha256:b6d455c6af34012062a0af906ad1617803bf46b37dc54938f68c478b2524252a", size = 6743333, upload-time = "2025-12-17T19:15:08.394Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/68/92/3e242ff1e2d9e459c599caef9127708b1f92606f38a9031a4b45549b427c/dilithium_py-1.4.0-py3-none-any.whl", hash = "sha256:dda3ae43e6e3d212ae1fe1b30d5b6dffe5e25a1f389d1fea26faad4afdc33ff8", size = 39936, upload-time = "2025-12-17T19:15:07.004Z" },
+]
+
+[[package]]
 name = "distro"
 version = "1.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1957,6 +1966,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "dilithium-py" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "litellm" },
@@ -1984,6 +1994,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "asyncpg", specifier = ">=0.29" },
+    { name = "dilithium-py", specifier = ">=1.4.0" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },

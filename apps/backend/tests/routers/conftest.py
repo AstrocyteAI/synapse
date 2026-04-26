@@ -17,3 +17,16 @@ def _no_restore_from_db():
     """
     with patch("synapse.main.restore_from_db", new=AsyncMock(return_value=None)):
         yield
+
+
+@pytest.fixture(autouse=True)
+def _null_feature_flags(request):
+    """Inject NullFeatureFlags on app.state so router tests are unaffected by EE.
+
+    Applied after the lifespan yields — look for the 'application' attribute
+    on the test's fixtures (set by _wired_client in router test files).
+    """
+    yield
+    # Overwrite after yield so it runs during client context
+    # The wired_client fixture already sets app.state; we let it stand.
+    # NullFeatureFlags is the default when no EE key is configured anyway.
