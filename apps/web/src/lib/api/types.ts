@@ -100,6 +100,62 @@ export interface MemorySearchResponse {
 	hits: MemoryHit[];
 }
 
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export interface MemberStat {
+	member_id: string;
+	member_name: string | null;
+	councils_participated: number;
+	avg_consensus_score: number | null;
+	dissent_count: number;
+}
+
+export interface MembersResponse {
+	data: MemberStat[];
+	generated_at: string;
+	tenant_id: string | null;
+}
+
+export interface VelocityPoint {
+	date: string;
+	count: number;
+}
+
+export interface VelocityResponse {
+	data: VelocityPoint[];
+	days: number;
+	generated_at: string;
+	tenant_id: string | null;
+}
+
+export interface ConsensusDistribution {
+	high: number;
+	medium: number;
+	low: number;
+	unscored: number;
+	total: number;
+}
+
+export interface ConsensusResponse {
+	data: ConsensusDistribution;
+	generated_at: string;
+	tenant_id: string | null;
+}
+
+export interface TopicStat {
+	topic_tag: string | null;
+	count: number;
+	avg_consensus: number | null;
+}
+
+export interface TopicsResponse {
+	data: TopicStat[];
+	generated_at: string;
+	tenant_id: string | null;
+}
+
 export type CouncilStatus =
 	| 'pending'
 	| 'stage_1'

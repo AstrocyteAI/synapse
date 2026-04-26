@@ -2,10 +2,14 @@ import type {
 	ChatWithVerdictResponse,
 	CouncilDetail,
 	CouncilSummary,
+	ConsensusResponse,
 	CreateCouncilResponse,
+	MembersResponse,
 	MemorySearchResponse,
 	Template,
-	ThreadEventsResponse
+	ThreadEventsResponse,
+	TopicsResponse,
+	VelocityResponse
 } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
@@ -155,6 +159,26 @@ export async function searchMemory(
 ): Promise<MemorySearchResponse> {
 	const params = new URLSearchParams({ q, bank, limit: String(limit) });
 	return request(`/v1/memory/search?${params}`);
+}
+
+// ---------------------------------------------------------------------------
+// Analytics
+// ---------------------------------------------------------------------------
+
+export async function getAnalyticsMembers(limit = 20): Promise<MembersResponse> {
+	return request(`/v1/analytics/members?limit=${limit}`);
+}
+
+export async function getAnalyticsVelocity(days = 30): Promise<VelocityResponse> {
+	return request(`/v1/analytics/velocity?days=${days}`);
+}
+
+export async function getAnalyticsConsensus(): Promise<ConsensusResponse> {
+	return request('/v1/analytics/consensus');
+}
+
+export async function getAnalyticsTopics(limit = 20): Promise<TopicsResponse> {
+	return request(`/v1/analytics/topics?limit=${limit}`);
 }
 
 // ---------------------------------------------------------------------------

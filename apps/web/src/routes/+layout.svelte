@@ -8,7 +8,8 @@
 	const navLinks = [
 		{ href: '/', label: 'Chat' },
 		{ href: '/councils', label: 'Councils' },
-		{ href: '/memory', label: 'Memory' }
+		{ href: '/memory', label: 'Memory' },
+		{ href: '/analytics', label: 'Analytics' }
 	];
 </script>
 
