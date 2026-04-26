@@ -90,6 +90,19 @@ jobs:
       - name: Run tests
         run: uv run pytest --cov=synapse --cov-report=term-missing --cov-report=xml -q
 
+      - name: Export OpenAPI contract
+        run: |
+          mkdir -p ../../openapi
+          cp synapse/contracts/synapse-v1.openapi.json ../../openapi/synapse-v1.openapi.json
+          uv run python -c "from synapse.openapi_contract import load_contract; import json; json.dumps(load_contract())"
+          cmp synapse/contracts/synapse-v1.openapi.json ../../openapi/synapse-v1.openapi.json
+
+      - name: Upload OpenAPI contract
+        uses: actions/upload-artifact@v4
+        with:
+          name: synapse-v1-openapi
+          path: openapi/synapse-v1.openapi.json
+
       - name: Upload coverage
         uses: actions/upload-artifact@v4
         with:

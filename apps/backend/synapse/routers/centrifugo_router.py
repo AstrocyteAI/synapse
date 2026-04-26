@@ -21,3 +21,27 @@ async def get_centrifugo_token(
     settings = request.app.state.settings
     token = issue_connection_token(user.sub, settings)
     return {"token": token}
+
+
+@router.get(
+    "/socket/token",
+    summary="Issue a realtime transport descriptor",
+)
+async def get_socket_token(
+    request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    settings = request.app.state.settings
+    token = issue_connection_token(user.sub, settings)
+    ttl = settings.centrifugo_token_ttl_seconds
+
+    return {
+        "transport": "centrifugo",
+        "url": settings.centrifugo_ws_url,
+        "token": token,
+        "expires_in": ttl,
+        "topics": {
+            "council": "council:<council_id>",
+            "thread": "thread:<thread_id>",
+        },
+    }

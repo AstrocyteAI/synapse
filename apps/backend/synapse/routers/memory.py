@@ -101,6 +101,24 @@ async def search_memory(
     }
 
 
+@router.get(
+    "/memory/recall",
+    summary="Recall memories using the shared Synapse backend contract",
+)
+async def recall_memory(
+    request: Request,
+    q: Annotated[str, Query(min_length=1, max_length=500, description="Search query")],
+    bank: Annotated[
+        str,
+        Query(description=f"Bank to search. One of: {', '.join(sorted(_SEARCH_BANKS))}"),
+    ] = _DEFAULT_BANK,
+    limit: Annotated[int, Query(ge=1, le=20, description="Max results")] = 10,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict:
+    result = await search_memory(request=request, q=q, bank=bank, limit=limit, user=user)
+    return {"data": {"memories": result["hits"], "query": result["query"], "bank": result["bank"]}}
+
+
 # ---------------------------------------------------------------------------
 # POST /v1/memory/retain
 # ---------------------------------------------------------------------------

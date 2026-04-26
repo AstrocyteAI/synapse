@@ -20,6 +20,7 @@ class Settings(BaseSettings):
 
     # --- Centrifugo ---
     centrifugo_api_url: str = "http://localhost:8002"
+    centrifugo_ws_url: str = "ws://localhost:8001/connection/websocket"
     centrifugo_api_key: str = "dev-centrifugo-api-key"
     centrifugo_token_secret: str = "dev-centrifugo-token-secret"
     centrifugo_token_ttl_seconds: int = 3600

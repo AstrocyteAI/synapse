@@ -1,0 +1,1 @@
+"""Packaged canonical OpenAPI contracts."""

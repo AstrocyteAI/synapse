@@ -16,15 +16,18 @@ from synapse.memory.gateway_client import GraphEntity, MemoryHit
 # Settings override — point at test doubles, never a real DB
 # ---------------------------------------------------------------------------
 
+TEST_JWT_SECRET = "test-jwt-secret-at-least-32-bytes"
+
 TEST_SETTINGS = Settings(
     database_url="postgresql+asyncpg://synapse:synapse@localhost:5432/synapse_test",
     astrocyte_gateway_url="http://astrocyte-mock",
     astrocyte_token="test-api-key",
     centrifugo_api_url="http://centrifugo-mock",
+    centrifugo_ws_url="ws://centrifugo-mock/connection/websocket",
     centrifugo_api_key="test-centrifugo-key",
-    centrifugo_token_secret="test-centrifugo-secret",
+    centrifugo_token_secret="test-centrifugo-secret-at-least-32-bytes",
     synapse_auth_mode="jwt_hs256",
-    synapse_jwt_secret="test-jwt-secret",
+    synapse_jwt_secret=TEST_JWT_SECRET,
     synapse_jwt_audience="synapse",
     stage1_timeout_seconds=10,
     stage2_timeout_seconds=10,
@@ -60,7 +63,7 @@ def make_jwt(
         "synapse_tenant": tenant_id,
         "principal": principal,
     }
-    return jwt.encode(payload, "test-jwt-secret", algorithm="HS256")
+    return jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
 
 
 # ---------------------------------------------------------------------------

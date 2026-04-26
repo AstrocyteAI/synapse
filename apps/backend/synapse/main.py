@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from synapse.config import get_settings
 from synapse.db.session import create_engine_and_sessionmaker
@@ -14,13 +15,16 @@ from synapse.ee_hooks import NullFeatureFlags
 from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.notifications.dispatcher import NotificationDispatcher
+from synapse.openapi_contract import load_contract
 from synapse.realtime.centrifugo import CentrifugoClient
 from synapse.routers import (
     analytics,
     api_keys,
+    audit_logs,
     centrifugo_router,
     contributions,
     councils,
+    mcp_compat,
     memory,
     notifications,
     templates,
@@ -101,6 +105,7 @@ def create_app() -> FastAPI:
         description="Multi-agent deliberation API",
         version="0.1.0",
         lifespan=lifespan,
+        openapi_url=None,
     )
 
     app.add_middleware(
@@ -119,6 +124,8 @@ def create_app() -> FastAPI:
     app.include_router(templates.router, prefix="/v1")
     app.include_router(memory.router, prefix="/v1")
     app.include_router(api_keys.router, prefix="/v1")
+    app.include_router(audit_logs.router, prefix="/v1")
+    app.include_router(mcp_compat.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(notifications.router, prefix="/v1")
 
@@ -129,6 +136,10 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
+
+    @app.get("/openapi.json", include_in_schema=False)
+    async def openapi_contract() -> JSONResponse:
+        return JSONResponse(load_contract())
 
     return app
 

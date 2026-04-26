@@ -1,0 +1,226 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Synapse Backend API",
+    "version": "1.0.0",
+    "description": "Shared REST contract implemented by Synapse EE and Cerebro."
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/v1/councils": {
+      "get": {
+        "tags": ["Councils"],
+        "summary": "List councils",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Council list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilListResponse" } } } }
+        }
+      },
+      "post": {
+        "tags": ["Councils"],
+        "summary": "Create a council",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilCreate" } } } },
+        "responses": {
+          "201": { "description": "Council created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
+          "202": { "description": "Council accepted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } }
+        }
+      }
+    },
+    "/v1/councils/{id}": {
+      "get": {
+        "tags": ["Councils"],
+        "summary": "Get a council",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "responses": {
+          "200": { "description": "Council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/councils/{id}/start": {
+      "post": {
+        "tags": ["Councils"],
+        "summary": "Start a council",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "responses": {
+          "200": { "description": "Running council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/councils/{id}/close": {
+      "post": {
+        "tags": ["Councils"],
+        "summary": "Close a council",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "responses": {
+          "200": { "description": "Closed council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/v1/socket/token": {
+      "get": {
+        "tags": ["Realtime"],
+        "summary": "Issue a realtime transport descriptor",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Realtime transport descriptor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RealtimeDescriptor" } } } }
+        }
+      }
+    },
+    "/v1/memory/recall": {
+      "get": {
+        "tags": ["Memory"],
+        "summary": "Recall memories",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
+          { "name": "bank", "in": "query", "required": false, "schema": { "type": "string", "default": "default" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "default": 10 } }
+        ],
+        "responses": {
+          "200": { "description": "Memory recall result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MemoryRecallResponse" } } } }
+        }
+      }
+    },
+    "/v1/audit_logs": {
+      "get": {
+        "tags": ["Audit Logs"],
+        "summary": "List tenant audit logs",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Audit logs", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditLogListResponse" } } } },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/v1/mcp": {
+      "post": {
+        "tags": ["MCP"],
+        "summary": "Dispatch a Synapse MCP tool",
+        "security": [{ "apiKeyAuth": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MCPRequest" } } } },
+        "responses": {
+          "200": { "description": "Tool result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MCPResponse" } } } },
+          "422": { "$ref": "#/components/responses/UnprocessableEntity" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "CouncilId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "x-api-key" }
+    },
+    "responses": {
+      "Forbidden": { "description": "Forbidden" },
+      "NotFound": { "description": "Not found" },
+      "UnprocessableEntity": { "description": "Invalid request" }
+    },
+    "schemas": {
+      "Council": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "title": { "type": ["string", "null"] },
+          "question": { "type": "string" },
+          "status": { "type": "string" },
+          "chairman_model": { "type": ["string", "null"] },
+          "members": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "verdict": { "type": ["object", "string", "null"], "additionalProperties": true },
+          "settings": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["id", "question", "status"]
+      },
+      "CouncilCreate": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string" },
+          "question": { "type": "string" },
+          "chairman_model": { "type": "string" },
+          "members": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "settings": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["question"]
+      },
+      "CouncilResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "$ref": "#/components/schemas/Council" }
+        },
+        "required": ["data"]
+      },
+      "CouncilListResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Council" } }
+        },
+        "required": ["data"]
+      },
+      "RealtimeDescriptor": {
+        "type": "object",
+        "properties": {
+          "transport": { "type": "string", "enum": ["phoenix", "centrifugo"] },
+          "url": { "type": "string" },
+          "token": { "type": "string" },
+          "expires_in": { "type": "integer" },
+          "topics": {
+            "type": "object",
+            "properties": {
+              "council": { "type": "string" },
+              "thread": { "type": "string" }
+            },
+            "required": ["council", "thread"]
+          }
+        },
+        "required": ["transport", "url", "token", "expires_in", "topics"]
+      },
+      "MemoryRecallResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["data"]
+      },
+      "AuditLogListResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+        },
+        "required": ["data"]
+      },
+      "MCPRequest": {
+        "type": "object",
+        "properties": {
+          "tool": { "type": "string" },
+          "arguments": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["tool", "arguments"]
+      },
+      "MCPResponse": {
+        "type": "object",
+        "properties": {
+          "result": {}
+        },
+        "required": ["result"]
+      }
+    }
+  }
+}

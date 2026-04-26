@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../auth/token_store.dart';
 import 'models.dart';
+import '../realtime/realtime_client.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -37,7 +38,8 @@ class SynapseApiClient {
       String message;
       try {
         final body = jsonDecode(response.body) as Map<String, dynamic>;
-        message = (body['detail'] as String?) ??
+        message =
+            (body['detail'] as String?) ??
             (body['message'] as String?) ??
             response.body;
       } catch (_) {
@@ -47,11 +49,12 @@ class SynapseApiClient {
     }
   }
 
-  Future<List<CouncilSummary>> listCouncils(
-      {int limit = 50, int offset = 0}) async {
+  Future<List<CouncilSummary>> listCouncils({
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final headers = await _authHeaders();
-    final uri =
-        Uri.parse('$baseUrl/v1/councils?limit=$limit&offset=$offset');
+    final uri = Uri.parse('$baseUrl/v1/councils?limit=$limit&offset=$offset');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     final list = jsonDecode(response.body) as List<dynamic>;
@@ -66,7 +69,8 @@ class SynapseApiClient {
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     return CouncilDetail.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<CreateCouncilResponse> createCouncil({
@@ -87,7 +91,8 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return CreateCouncilResponse.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<void> closeCouncil(String sessionId) async {
@@ -124,7 +129,8 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return ContributeResponse.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<ThreadEvent>> listEvents(
@@ -135,8 +141,9 @@ class SynapseApiClient {
     final headers = await _authHeaders();
     final params = <String, String>{'limit': '$limit'};
     if (afterId != null) params['after_id'] = '$afterId';
-    final uri = Uri.parse('$baseUrl/v1/threads/$threadId/events')
-        .replace(queryParameters: params);
+    final uri = Uri.parse(
+      '$baseUrl/v1/threads/$threadId/events',
+    ).replace(queryParameters: params);
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     final list = jsonDecode(response.body) as List<dynamic>;
@@ -145,8 +152,7 @@ class SynapseApiClient {
         .toList();
   }
 
-  Future<ChatResponse> chatWithVerdict(
-      String sessionId, String message) async {
+  Future<ChatResponse> chatWithVerdict(String sessionId, String message) async {
     final headers = await _authHeaders();
     final body = {'message': message};
     final uri = Uri.parse('$baseUrl/v1/councils/$sessionId/chat');
@@ -157,7 +163,8 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return ChatResponse.fromJson(
-        jsonDecode(response.body) as Map<String, dynamic>);
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<List<Template>> listTemplates() async {
@@ -178,5 +185,15 @@ class SynapseApiClient {
     _checkResponse(response);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     return body['token'] as String;
+  }
+
+  Future<RealtimeDescriptor> getRealtimeDescriptor() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/socket/token');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return RealtimeDescriptor.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 }
