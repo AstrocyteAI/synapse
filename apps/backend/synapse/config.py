@@ -57,6 +57,19 @@ class Settings(BaseSettings):
     critique_timeout_seconds: int = 60
     revise_timeout_seconds: int = 60
 
+    # --- Notifications (EE Team+) ---
+    # SMTP — operators supply their own server; no vendor lock-in
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_address: str = "noreply@synapse.local"
+    smtp_tls: bool = True
+
+    # ntfy — self-hostable push (UnifiedPush on Android; APNs relay on iOS)
+    ntfy_url: str = ""  # e.g. https://ntfy.sh or http://ntfy.internal:2586
+    ntfy_token: str = ""  # optional Bearer token for authenticated ntfy topics
+
     # --- EE ---
     synapse_license_key: str | None = None
     synapse_license_key_offline: str | None = None

@@ -278,3 +278,52 @@ class Webhook(Base):
         DateTime(timezone=True), nullable=True
     )
     failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+# ---------------------------------------------------------------------------
+# B10 — Notification preferences + device tokens
+# ---------------------------------------------------------------------------
+
+
+class NotificationPreferences(Base):
+    """Per-principal notification channel preferences (EE Team+).
+
+    One row per principal (unique on principal + tenant_id).
+    Created on first PUT — no row means all notifications disabled.
+    """
+
+    __tablename__ = "notification_preferences"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    principal: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_address: Mapped[str | None] = mapped_column(String(256), nullable=True)
+
+    ntfy_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class DeviceToken(Base):
+    """Push notification endpoint for a principal's device (EE Team+).
+
+    token_type: 'ntfy' — the token value is a ntfy topic name or full URL.
+    Extensible: add 'apns_direct', 'fcm', etc. in future tiers.
+    """
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    principal: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    token_type: Mapped[str] = mapped_column(String(32), nullable=False)  # 'ntfy'
+    token: Mapped[str] = mapped_column(Text, nullable=False)
+    device_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

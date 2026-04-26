@@ -57,6 +57,7 @@ def _get_orchestrator(request: Request) -> CouncilOrchestrator:
         llm=LLMClient(request.app.state.settings),
         settings=request.app.state.settings,
         http_client=request.app.state.http_client,
+        notification_dispatcher=getattr(request.app.state, "notification_dispatcher", None),
     )
 
 

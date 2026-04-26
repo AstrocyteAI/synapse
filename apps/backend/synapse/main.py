@@ -13,6 +13,7 @@ from synapse.db.session import create_engine_and_sessionmaker
 from synapse.ee_hooks import NullFeatureFlags
 from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
+from synapse.notifications.dispatcher import NotificationDispatcher
 from synapse.realtime.centrifugo import CentrifugoClient
 from synapse.routers import (
     analytics,
@@ -21,6 +22,7 @@ from synapse.routers import (
     contributions,
     councils,
     memory,
+    notifications,
     templates,
     threads,
     webhooks,
@@ -68,6 +70,13 @@ async def lifespan(app: FastAPI):
     app.state.engine = engine
     app.state.sessionmaker = sessionmaker
 
+    # B10 — notification dispatcher (EE Team+; works as no-op if feature not licensed)
+    app.state.notification_dispatcher = NotificationDispatcher(
+        settings=settings,
+        http_client=http_client,
+        feature_flags=app.state.feature_flags,
+    )
+
     # B7 — scheduler: register before restore so fired tasks can use it
     scheduler = ScheduledCouncilRunner()
     app.state.scheduler = scheduler
@@ -111,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(memory.router, prefix="/v1")
     app.include_router(api_keys.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
+    app.include_router(notifications.router, prefix="/v1")
 
     # MCP server — agent-to-agent access via Streamable HTTP transport
     # Tools: start_council, join, contribute, recall_precedent, close

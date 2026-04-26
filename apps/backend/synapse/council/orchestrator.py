@@ -46,12 +46,14 @@ class CouncilOrchestrator:
         llm: LLMClient,
         settings,
         http_client=None,
+        notification_dispatcher=None,
     ) -> None:
         self._astrocyte = astrocyte
         self._centrifugo = centrifugo
         self._llm = llm
         self._settings = settings
         self._http_client = http_client
+        self._notification_dispatcher = notification_dispatcher
 
     async def run(
         self,
@@ -704,6 +706,21 @@ class CouncilOrchestrator:
                     )
             except Exception as _wh_err:
                 _logger.warning("Webhook firing failed: %s", _wh_err)
+
+        # --- Notifications (EE Team+) ---
+        if self._notification_dispatcher is not None and final_status == CouncilStatus.closed:
+            _session_for_notif = await db.get(CouncilSession, session_id)
+            if _session_for_notif is not None:
+                asyncio.create_task(
+                    self._notification_dispatcher.dispatch_verdict(
+                        council_id=council_id,
+                        question=question,
+                        verdict=synthesis.verdict,
+                        recipient_principal=_session_for_notif.created_by,
+                        db=db,
+                        tenant_id=_session_for_notif.tenant_id,
+                    )
+                )
 
         # --- Retain to Astrocyte ---
         asyncio.create_task(

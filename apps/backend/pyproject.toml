@@ -30,6 +30,9 @@ dependencies = [
     "mcp>=1.0",
     "pyyaml>=6.0.3",
     "dilithium-py>=1.4.0",
+    # Email notifications (EE Team+)
+    "aiosmtplib>=3.0",
+    "pydantic[email]>=2.12.5",
 ]
 
 [project.optional-dependencies]
