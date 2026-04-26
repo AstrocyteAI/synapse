@@ -341,7 +341,7 @@ Python · FastAPI · Centrifugo
 | ✅ **B6 — Workflows** | Conflict detection vs precedents, `pending_approval` status, approval/reject endpoints, `conflict_detected` thread events |
 | ✅ **B7 — Scheduling** | `run_at` on `CreateCouncilRequest`, `scheduled` status, `ScheduledCouncilRunner` (asyncio tasks, DB recovery on startup), deadline enforcement for async councils |
 | **B8 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering |
-| **B9 — RBAC + Webhooks** | Full role model, API keys, outbound HMAC-signed webhooks, export integrations |
+| ✅ **B9 — RBAC + Webhooks** | API keys (SHA-256, sk- prefix), HMAC-SHA256 outbound webhooks, 3-attempt retry, events: council_closed/conflict_detected/waiting_contributions/pending_approval |
 | **B10 — Notifications** | Email notifications, weekly digest, per-user preferences |
 | **B11 — Multi-tenancy** | Tenant isolation, quota enforcement, Stripe billing (EE) |
 
@@ -406,4 +406,4 @@ Tracks are independent but some phases have natural synchronisation points:
 | ✅ Templates API | B4 ✅ | W5 template picker can ship |
 | ✅ Workflows API | B6 ✅ | W6 ✅ approval UI shipped |
 | Analytics API | B8 complete | W7 dashboard can ship |
-| Full RBAC + webhooks | B9 complete | W8 admin panel can ship |
+| ✅ Full RBAC + webhooks | B9 ✅ | W8 admin panel can ship |
