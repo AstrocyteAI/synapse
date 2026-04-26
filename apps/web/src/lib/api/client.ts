@@ -3,9 +3,14 @@ import type {
 	CouncilDetail,
 	CouncilSummary,
 	ConsensusResponse,
+	CompileResponse,
 	CreateCouncilResponse,
+	GraphNeighborsResponse,
+	GraphSearchResponse,
 	MembersResponse,
 	MemorySearchResponse,
+	ReflectResponse,
+	RetainResponse,
 	Template,
 	ThreadEventsResponse,
 	TopicsResponse,
@@ -159,6 +164,61 @@ export async function searchMemory(
 ): Promise<MemorySearchResponse> {
 	const params = new URLSearchParams({ q, bank, limit: String(limit) });
 	return request(`/v1/memory/search?${params}`);
+}
+
+export async function retainMemory(
+	content: string,
+	tags: string[] = [],
+	metadata: Record<string, unknown> = {}
+): Promise<RetainResponse> {
+	return request('/v1/memory/retain', {
+		method: 'POST',
+		body: JSON.stringify({ content, bank_id: 'agents', tags, metadata })
+	});
+}
+
+export async function reflectMemory(
+	query: string,
+	bank: 'decisions' | 'precedents' | 'councils' = 'decisions',
+	includeSources = true
+): Promise<ReflectResponse> {
+	return request('/v1/memory/reflect', {
+		method: 'POST',
+		body: JSON.stringify({ query, bank_id: bank, include_sources: includeSources })
+	});
+}
+
+export async function graphSearchMemory(
+	query: string,
+	bank: string,
+	limit = 10
+): Promise<GraphSearchResponse> {
+	return request('/v1/memory/graph/search', {
+		method: 'POST',
+		body: JSON.stringify({ query, bank_id: bank, limit })
+	});
+}
+
+export async function graphNeighborsMemory(
+	entityIds: string[],
+	bank: string,
+	maxDepth = 2,
+	limit = 20
+): Promise<GraphNeighborsResponse> {
+	return request('/v1/memory/graph/neighbors', {
+		method: 'POST',
+		body: JSON.stringify({ entity_ids: entityIds, bank_id: bank, max_depth: maxDepth, limit })
+	});
+}
+
+export async function compileMemory(
+	bank: 'decisions' | 'agents',
+	scope?: string
+): Promise<CompileResponse> {
+	return request('/v1/memory/compile', {
+		method: 'POST',
+		body: JSON.stringify({ bank_id: bank, ...(scope ? { scope } : {}) })
+	});
 }
 
 // ---------------------------------------------------------------------------

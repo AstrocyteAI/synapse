@@ -156,6 +156,47 @@ export interface TopicsResponse {
 	tenant_id: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Memory — new operations (B12)
+// ---------------------------------------------------------------------------
+
+export interface RetainResponse {
+	memory_id: string;
+	stored: boolean;
+}
+
+export interface ReflectResponse {
+	answer: string;
+	sources: unknown[];
+}
+
+export interface GraphEntity {
+	entity_id: string;
+	name: string;
+	entity_type: string;
+	metadata: Record<string, unknown>;
+}
+
+export interface GraphSearchResponse {
+	query: string;
+	bank: string;
+	count: number;
+	entities: GraphEntity[];
+}
+
+export interface GraphNeighborsResponse {
+	bank: string;
+	count: number;
+	hits: MemoryHit[];
+}
+
+export interface CompileResponse {
+	ok?: boolean;
+	bank_id?: string;
+	pages_written?: number;
+	scopes?: string[];
+}
+
 export type CouncilStatus =
 	| 'pending'
 	| 'stage_1'
