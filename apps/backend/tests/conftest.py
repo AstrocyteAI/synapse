@@ -10,7 +10,7 @@ import pytest
 
 from synapse.config import Settings, get_settings
 from synapse.council.models import CouncilMember, MemberRanking, RankingResult, StageOneResponse
-from synapse.memory.gateway_client import MemoryHit
+from synapse.memory.gateway_client import GraphEntity, MemoryHit
 
 # ---------------------------------------------------------------------------
 # Settings override — point at test doubles, never a real DB
@@ -166,8 +166,29 @@ def mock_astrocyte(sample_precedents):
     client.recall = AsyncMock(return_value=sample_precedents)
     client.retain = AsyncMock(return_value=None)
     client.reflect = AsyncMock(return_value=None)
-    client.forget = AsyncMock(return_value=None)
+    client.forget = AsyncMock(return_value={"deleted": 0})
+    client.compile = AsyncMock(return_value={"pages_written": 0, "scopes": []})
+    client.graph_search = AsyncMock(return_value=[])
+    client.graph_neighbors = AsyncMock(return_value=[])
     return client
+
+
+@pytest.fixture
+def sample_graph_entities() -> list[GraphEntity]:
+    return [
+        GraphEntity(
+            entity_id="ent-1",
+            name="PostgreSQL",
+            entity_type="technology",
+            metadata={"mentioned_in": ["council-abc"]},
+        ),
+        GraphEntity(
+            entity_id="ent-2",
+            name="Redis",
+            entity_type="technology",
+            metadata={},
+        ),
+    ]
 
 
 # ---------------------------------------------------------------------------
