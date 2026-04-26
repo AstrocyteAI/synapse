@@ -14,6 +14,7 @@ from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
 from synapse.routers import (
+    analytics,
     api_keys,
     centrifugo_router,
     contributions,
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(analytics.router, prefix="/v1")
     app.include_router(councils.router, prefix="/v1")
     app.include_router(contributions.router, prefix="/v1")
     app.include_router(threads.router, prefix="/v1")
