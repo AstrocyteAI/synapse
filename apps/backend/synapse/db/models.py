@@ -223,3 +223,58 @@ class ThreadEvent(Base):
     )
 
     thread: Mapped[Thread] = relationship("Thread", back_populates="events")
+
+
+# ---------------------------------------------------------------------------
+# B9 — API keys (machine-to-machine auth)
+# ---------------------------------------------------------------------------
+
+
+class ApiKey(Base):
+    """Hashed API key for machine-to-machine authentication.
+
+    The raw key is generated once and shown to the user at creation time.
+    Only the SHA-256 hex digest is stored here (key_hash).
+    key_prefix is for display only — "sk-" + first 8 hex chars of raw key.
+    """
+
+    __tablename__ = "api_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    key_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    key_prefix: Mapped[str] = mapped_column(String(12), nullable=False)
+    created_by: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    roles: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# B9 — Webhooks
+# ---------------------------------------------------------------------------
+
+
+class Webhook(Base):
+    """Outbound webhook registration for event-driven integrations."""
+
+    __tablename__ = "webhooks"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    url: Mapped[str] = mapped_column(Text, nullable=False)
+    events: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    secret: Mapped[str] = mapped_column(String(256), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_by: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    last_delivery_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

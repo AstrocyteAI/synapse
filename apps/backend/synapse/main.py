@@ -13,7 +13,16 @@ from synapse.db.session import create_engine_and_sessionmaker
 from synapse.mcp.server import mcp as mcp_server
 from synapse.memory.gateway_client import AstrocyteGatewayClient
 from synapse.realtime.centrifugo import CentrifugoClient
-from synapse.routers import centrifugo_router, contributions, councils, memory, templates, threads
+from synapse.routers import (
+    api_keys,
+    centrifugo_router,
+    contributions,
+    councils,
+    memory,
+    templates,
+    threads,
+    webhooks,
+)
 from synapse.scheduling.runner import ScheduledCouncilRunner, restore_from_db
 
 
@@ -75,6 +84,8 @@ def create_app() -> FastAPI:
     app.include_router(centrifugo_router.router, prefix="/v1")
     app.include_router(templates.router, prefix="/v1")
     app.include_router(memory.router, prefix="/v1")
+    app.include_router(api_keys.router, prefix="/v1")
+    app.include_router(webhooks.router, prefix="/v1")
 
     # MCP server — agent-to-agent access via Streamable HTTP transport
     # Tools: start_council, join, contribute, recall_precedent, close

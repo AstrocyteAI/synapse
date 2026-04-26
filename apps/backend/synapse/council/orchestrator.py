@@ -45,11 +45,13 @@ class CouncilOrchestrator:
         centrifugo: CentrifugoClient,
         llm: LLMClient,
         settings,
+        http_client=None,
     ) -> None:
         self._astrocyte = astrocyte
         self._centrifugo = centrifugo
         self._llm = llm
         self._settings = settings
+        self._http_client = http_client
 
     async def run(
         self,
@@ -376,6 +378,28 @@ class CouncilOrchestrator:
             len(session.contributions) if session else 0,
             effective_quorum,
         )
+
+        # --- Fire waiting_contributions webhook (B9) ---
+        if self._http_client:
+            try:
+                from synapse.webhooks.delivery import fire_webhooks
+
+                asyncio.create_task(
+                    fire_webhooks(
+                        db,
+                        self._http_client,
+                        "waiting_contributions",
+                        {
+                            "council_id": council_id,
+                            "quorum": effective_quorum,
+                            "received": len(session.contributions) if session else 0,
+                        },
+                        context.tenant_id,
+                    )
+                )
+            except Exception as _wh_err:
+                _logger.warning("Webhook firing failed (waiting_contributions): %s", _wh_err)
+
         return None
 
     # ---------------------------------------------------------------------------
@@ -643,6 +667,43 @@ class CouncilOrchestrator:
             )
             db.add(transcript)
             await db.commit()
+
+        # --- Fire webhooks (B9) ---
+        if self._http_client:
+            try:
+                from synapse.webhooks.delivery import fire_webhooks
+
+                if final_status == CouncilStatus.closed:
+                    asyncio.create_task(
+                        fire_webhooks(
+                            db,
+                            self._http_client,
+                            "council_closed",
+                            {
+                                "council_id": council_id,
+                                "verdict": synthesis.verdict,
+                                "confidence_label": synthesis.confidence_label,
+                                "consensus_score": ranking_result.consensus_score,
+                            },
+                            context.tenant_id,
+                        )
+                    )
+                if conflict_result.detected:
+                    asyncio.create_task(
+                        fire_webhooks(
+                            db,
+                            self._http_client,
+                            "conflict_detected",
+                            {
+                                "council_id": council_id,
+                                "summary": conflict_result.summary,
+                                "precedent_score": conflict_result.precedent_score,
+                            },
+                            context.tenant_id,
+                        )
+                    )
+            except Exception as _wh_err:
+                _logger.warning("Webhook firing failed: %s", _wh_err)
 
         # --- Retain to Astrocyte ---
         asyncio.create_task(

@@ -1,18 +1,28 @@
-"""JWT validation — HS256 (dev) and RS256 OIDC (production)."""
+"""JWT validation — HS256 (dev) and RS256 OIDC (production).
+
+Also handles API key authentication for machine-to-machine access (B9).
+API keys start with "sk-" and are validated by SHA-256 hash lookup.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import logging
+import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
 import jwt
-from fastapi import Header, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
 from jwt import PyJWKClient
 from jwt.exceptions import PyJWTError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from synapse.config import Settings
+from synapse.db.session import get_session as get_db_session
 
 _logger = logging.getLogger(__name__)
 
@@ -80,15 +90,58 @@ def _build_user(payload: dict[str, Any]) -> AuthenticatedUser:
     )
 
 
+async def _authenticate_api_key(token: str, db: AsyncSession) -> AuthenticatedUser:
+    """Look up an API key by its SHA-256 hash and return an AuthenticatedUser."""
+    # Import here to avoid circular imports at module load time
+    from synapse.db.models import ApiKey
+
+    key_hash = hashlib.sha256(token.encode()).hexdigest()
+    stmt = select(ApiKey).where(ApiKey.key_hash == key_hash, ApiKey.revoked_at.is_(None))
+    result = await db.execute(stmt)
+    api_key = result.scalar_one_or_none()
+    if not api_key:
+        raise HTTPException(status_code=401, detail="Invalid or revoked API key")
+    # Update last_used_at
+    api_key.last_used_at = datetime.now(UTC)
+    await db.commit()
+    return AuthenticatedUser(
+        sub=api_key.created_by,
+        principal=api_key.created_by,
+        tenant_id=api_key.tenant_id,
+        roles=list(api_key.roles or ["member"]),
+        raw_claims={"sub": api_key.created_by, "api_key_id": str(api_key.id)},
+    )
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Generate a new API key.
+
+    Returns (raw_key, key_hash, key_prefix).
+    raw_key is shown once and never stored.
+    key_hash is the SHA-256 hex digest stored in the DB.
+    key_prefix is "sk-" + first 8 hex chars (display only).
+    """
+    raw = "sk-" + secrets.token_hex(32)  # "sk-" + 64 hex = 67 chars
+    key_hash = hashlib.sha256(raw.encode()).hexdigest()
+    key_prefix = raw[:11]  # "sk-" + first 8 chars
+    return raw, key_hash, key_prefix
+
+
 async def get_current_user(
     request: Request,
     authorization: str | None = Header(default=None),
+    db: AsyncSession = Depends(get_db_session),
 ) -> AuthenticatedUser:
-    """FastAPI dependency — validates Bearer JWT and returns the authenticated user."""
+    """FastAPI dependency — validates Bearer JWT or API key and returns the authenticated user."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Bearer token required")
 
     token = authorization.removeprefix("Bearer ").strip()
+
+    # API key path — tokens starting with "sk-" are hashed and looked up in the DB
+    if token.startswith("sk-"):
+        return await _authenticate_api_key(token, db)
+
     settings: Settings = request.app.state.settings
 
     if settings.synapse_auth_mode == "jwt_hs256":
