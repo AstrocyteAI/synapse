@@ -1,0 +1,115 @@
+name: Flutter CI
+
+on:
+  push:
+    paths:
+      - "apps/synapse_app/**"
+      - ".github/workflows/flutter-ci.yml"
+  pull_request:
+    paths:
+      - "apps/synapse_app/**"
+      - ".github/workflows/flutter-ci.yml"
+
+defaults:
+  run:
+    working-directory: apps/synapse_app
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Analyze — platform-agnostic, run once
+  # ---------------------------------------------------------------------------
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --fatal-infos
+
+  # ---------------------------------------------------------------------------
+  # Test — OS matrix (widget/unit tests, headless)
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test (${{ matrix.os }})
+    needs: analyze
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.6"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test --reporter expanded
+
+  # ---------------------------------------------------------------------------
+  # Build — each runner builds its native desktop target
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (${{ matrix.target }})
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+            build-cmd: flutter build linux --debug
+            setup: |
+              sudo apt-get update -q
+              sudo apt-get install -y --no-install-recommends \
+                clang cmake ninja-build pkg-config \
+                libgtk-3-dev liblzma-dev libstdc++-12-dev
+          - os: windows-latest
+            target: windows
+            build-cmd: flutter build windows --debug
+            setup: ""
+          - os: macos-latest
+            target: macos
+            build-cmd: flutter build macos --debug
+            setup: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.6"
+          channel: stable
+          cache: true
+
+      - name: Platform setup (Linux only)
+        if: matrix.os == 'ubuntu-latest'
+        run: ${{ matrix.setup }}
+        working-directory: .
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Enable desktop target
+        run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Build ${{ matrix.target }}
+        run: ${{ matrix.build-cmd }}
