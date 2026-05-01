@@ -198,6 +198,29 @@ export interface CompileResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Backend metadata (X-2 / X-3)
+// ---------------------------------------------------------------------------
+
+export interface BackendFeatureFlags {
+	notifications: boolean;
+	audit_log: boolean;
+	saml_sso: boolean;
+	scim: boolean;
+	compliance_ui: boolean;
+	quotas: boolean;
+	tenant_admin: boolean;
+}
+
+export interface BackendInfo {
+	backend: 'synapse' | 'cerebro';
+	version: string;
+	contract_version: string;
+	multi_tenant: boolean;
+	billing: boolean;
+	features: BackendFeatureFlags;
+}
+
+// ---------------------------------------------------------------------------
 // Notifications (B10 / W9)
 // ---------------------------------------------------------------------------
 

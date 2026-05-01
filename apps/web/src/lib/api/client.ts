@@ -1,4 +1,5 @@
 import type {
+	BackendInfo,
 	ChatWithVerdictResponse,
 	CouncilDetail,
 	CouncilSummary,
@@ -243,6 +244,18 @@ export async function getAnalyticsConsensus(): Promise<ConsensusResponse> {
 
 export async function getAnalyticsTopics(limit = 20): Promise<TopicsResponse> {
 	return request(`/v1/analytics/topics?limit=${limit}`);
+}
+
+// ---------------------------------------------------------------------------
+// Backend metadata (X-2 / X-3) — public, no auth required
+// ---------------------------------------------------------------------------
+
+export async function getBackendInfo(): Promise<BackendInfo> {
+	// Cannot use authHeaders() — endpoint is intentionally public so the
+	// client can call it before login.
+	const res = await fetch(`${API_BASE}/v1/info`);
+	if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => res.statusText)}`);
+	return res.json();
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,8 @@
 	import '../app.css';
 	import { getToken } from '$lib/api/client';
 	import { getNotificationFeed } from '$lib/api/client';
+	import { backendStore } from '$lib/stores/backend.svelte';
+	import BackendBadge from '$lib/components/BackendBadge.svelte';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 
@@ -35,6 +37,10 @@
 	}
 
 	onMount(() => {
+		// Fetch backend metadata once at app load (X-3) — drives BackendBadge
+		// and any multi_tenant / billing UI gating downstream.
+		backendStore.load();
+
 		refreshUnreadCount();
 		// Re-check every 60 s while the tab is open
 		const interval = setInterval(refreshUnreadCount, 60_000);
@@ -77,6 +83,8 @@
 		</nav>
 
 		<div class="ml-auto flex items-center gap-3">
+			<BackendBadge />
+
 			<!-- Notification bell -->
 			<a
 				href="/notifications"
