@@ -92,6 +92,16 @@
         }
       }
     },
+    "/v1/info": {
+      "get": {
+        "tags": ["Info"],
+        "summary": "Backend deployment metadata (public)",
+        "description": "Returns backend type (synapse/cerebro), version, multi-tenant flag, billing flag, and feature flags. Used by clients to be backend-agnostic.",
+        "responses": {
+          "200": { "description": "Backend info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BackendInfo" } } } }
+        }
+      }
+    },
     "/v1/audit_logs": {
       "get": {
         "tags": ["Audit Logs"],
@@ -278,6 +288,30 @@
           }
         },
         "required": ["transport", "url", "token", "expires_in", "topics"]
+      },
+      "BackendInfo": {
+        "type": "object",
+        "properties": {
+          "backend": { "type": "string", "enum": ["synapse", "cerebro"] },
+          "version": { "type": "string" },
+          "contract_version": { "type": "string" },
+          "multi_tenant": { "type": "boolean" },
+          "billing": { "type": "boolean" },
+          "features": {
+            "type": "object",
+            "properties": {
+              "notifications": { "type": "boolean" },
+              "audit_log": { "type": "boolean" },
+              "saml_sso": { "type": "boolean" },
+              "scim": { "type": "boolean" },
+              "compliance_ui": { "type": "boolean" },
+              "quotas": { "type": "boolean" },
+              "tenant_admin": { "type": "boolean" }
+            },
+            "required": ["notifications", "audit_log", "saml_sso", "scim", "compliance_ui", "quotas", "tenant_admin"]
+          }
+        },
+        "required": ["backend", "version", "contract_version", "multi_tenant", "billing", "features"]
       },
       "MemoryRecallResponse": {
         "type": "object",

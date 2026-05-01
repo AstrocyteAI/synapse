@@ -1,240 +1,60 @@
-# Multi-tenancy and billing
+# Multi-tenancy
 
-This document defines workspace isolation, usage tracking, quota enforcement, and billing in Synapse for SaaS deployments.
+**Synapse is a single-tenant Enterprise Edition backend.** Multi-tenancy is **not** implemented in this codebase and is **not** on the roadmap.
 
----
-
-## 1. Overview
-
-Multi-tenancy enables a single Synapse deployment to serve multiple independent organisations (tenants). Each tenant has:
-- Complete isolation of councils, verdicts, and memory banks
-- Independent RBAC configuration
-- Separate usage quotas and billing
-- Their own MIP routing rules and council templates (optional)
-
-Multi-tenancy is relevant for **hosted SaaS deployments**. Self-hosted single-tenant deployments can disable it entirely.
+For deployments that need multiple isolated tenants on shared infrastructure (a SaaS or service-provider model), use **Cerebro** — a separate Elixir/Phoenix backend that implements the same Synapse REST contract with full multi-tenancy, quotas, and billing built in.
 
 ---
 
-## 2. Tenant model
+## 1. What "single-tenant" means in Synapse
 
-A **tenant** maps to a workspace — typically one organisation or team. Users belong to one or more tenants.
+One Synapse deployment serves one organisation. Every user authenticated against that deployment is implicitly part of the same tenant. There is no tenant administration UI, no quota enforcement, no per-tenant billing.
 
-```
-Tenant (org/workspace)
-  ├── Users (with roles)
-  ├── API keys
-  ├── Councils
-  ├── Astrocyte banks (isolated by tenant_id)
-  ├── Templates (built-in + custom)
-  ├── Webhooks
-  ├── Notification preferences
-  └── Billing subscription
-```
+Operators control isolation by running **one Synapse process per organisation**, typically with a dedicated database and Astrocyte gateway. Two organisations sharing one Synapse deployment is not a supported configuration.
 
-### 2.1 Tenant isolation in Astrocyte
+## 2. Why `tenant_id` columns still exist
 
-Every Astrocyte call from Synapse includes a `tenant_id` in the `AstrocyteContext`. Astrocyte enforces bank-level isolation — a query from `tenant_acme` cannot access banks belonging to `tenant_beta`.
+Synapse models (`council_sessions`, `audit_events`, `notification_preferences`, etc.) carry a nullable `tenant_id` column. This is **not** a multi-tenancy mechanism — it exists for two reasons:
 
-```elixir
-context = %AstrocyteContext{
-  principal: "user:#{user_id}",
-  tenant_id: jwt.synapse_tenant   # enforces isolation at memory layer
-}
-```
+1. **Contract alignment.** Synapse and Cerebro both implement `synapse-v1.openapi.json`. Keeping the same column shape means an operator can migrate from self-hosted Synapse to managed Cerebro without a schema rewrite.
+2. **Future audit grouping.** A single-tenant Synapse can still group audit rows by department or environment via `tenant_id` — used as a categorisation tag, not a security boundary.
 
-Bank naming convention in multi-tenant mode: `{tenant_id}:councils`, `{tenant_id}:precedents`, etc.
+Synapse routers do filter by `tenant_id` where the user's JWT carries one (defense in depth), but isolation is **not** the threat model here. A malicious caller with a valid JWT for the deployment is assumed to have access to the deployment's data.
 
-### 2.2 Tenant provisioning
+## 3. When to use Cerebro instead
 
-Tenants are provisioned automatically on first login via OIDC (the tenant claim in the JWT creates the tenant record) or manually via the admin API.
+Switch to Cerebro when any of these are true:
 
-```http
-POST /v1/admin/tenants
-{
-  "name": "Acme Corp",
-  "slug": "acme",
-  "plan": "team",
-  "owner_email": "alice@acme.com"
-}
-```
+- You need to host more than one customer on shared infrastructure
+- You need plan-based quotas (councils/day, members/council, storage caps)
+- You need Stripe-backed subscription billing and usage metering
+- You need a super-admin panel for tenant lifecycle (provision, suspend, delete)
+- You need Singapore/EU data-residency segregation across tenants
 
----
+Cerebro is a separate Elixir/Phoenix backend in its own repository (`~/AstrocyteAI/cerebro`). It exposes the same REST contract as Synapse, so the Svelte web, Flutter desktop/mobile, and SDK clients work against either backend unchanged.
 
-## 3. Usage tracking
+See `cerebro/docs/_design/deployment-modes.md` for Cerebro's hosted SaaS and on-premise single-tenant deployment options.
 
-Synapse tracks usage per tenant for quota enforcement and billing.
+## 4. EE features that Synapse *does* implement
 
-### 3.1 Tracked metrics
+Single-tenancy ≠ no enterprise features. Synapse EE includes:
 
-| Metric | Unit | Billed? |
-|--------|------|--------|
-| Councils created | count | ✓ |
-| LLM tokens consumed | tokens (input + output) | ✓ |
-| Astrocyte storage | MB | ✓ (above free tier) |
-| Webhook deliveries | count | — |
-| API calls | count | — (rate limited, not billed) |
+| Feature | Lives in |
+|---|---|
+| Email + ntfy notification dispatch | `synapse/notifications/` |
+| Audit log (append-only) | `synapse/audit.py` + `synapse/routers/audit_logs.py` |
+| API keys with SHA-256 hashing | `synapse/auth/jwt.py` |
+| Outbound webhooks with HMAC signing | `synapse/webhooks/` |
+| OIDC/SAML-compatible JWT auth | `synapse/auth/jwt.py` |
+| Feature licensing via `FeatureFlags` | `synapse/ee_hooks.py` (OSS) and `ee/license/` (proprietary) |
 
-### 3.2 Usage API
-
-```http
-GET /v1/usage
-  ?from=2025-11-01&to=2025-11-30
-→ {
-    "councils_created": 142,
-    "llm_tokens": 4820000,
-    "storage_mb": 128,
-    "period": { "from": "...", "to": "..." }
-  }
-```
-
-Usage data is refreshed every hour. Real-time quota checks use [`limits`](https://limits.readthedocs.io/) — a Python rate-limiting library backed by in-memory storage (single-node) or Redis (multi-node). The same Redis instance used by ARQ serves as the quota counter backend.
-
----
-
-## 4. Quotas
-
-Quotas prevent runaway usage and enable fair resource allocation across tenants.
-
-### 4.1 Quota types
-
-| Quota | Scope | Default (team plan) |
-|-------|-------|---------------------|
-| `councils_per_day` | Per tenant | 50 |
-| `councils_per_user_per_day` | Per user | 10 |
-| `max_members_per_council` | Per council | 5 |
-| `max_rounds_per_council` | Per council | 3 |
-| `api_requests_per_minute` | Per API key | 60 |
-| `storage_mb` | Per tenant | 1000 |
-
-### 4.2 Quota enforcement
-
-Quotas are checked before council creation and before each API request:
-
-```elixir
-:ok = Quotas.check!(tenant_id, :councils_per_day)
-# raises QuotaExceededError if limit reached
-```
-
-Quota checks use Redis atomic counters with TTL-based reset (daily quotas reset at midnight UTC).
-
-### 4.3 Quota exceeded behaviour
-
-When a quota is exceeded:
-- API returns `429 Too Many Requests` with a `Retry-After` header
-- The response body includes which quota was exceeded and when it resets
-- Workspace admin receives a notification
-
-### 4.4 Custom quotas
-
-Admins can request quota increases via the billing portal or by contacting support. Custom quotas override plan defaults and are stored per tenant.
-
----
-
-## 5. Plans
-
-| Plan | Councils/day | Members/council | Storage | Price |
-|------|-------------|----------------|---------|-------|
-| **Free** | 5 | 3 | 100 MB | $0 |
-| **Team** | 50 | 5 | 1 GB | $49/month |
-| **Pro** | 500 | 10 | 10 GB | $199/month |
-| **Enterprise** | Unlimited | Unlimited | Custom | Contact |
-
-Plans map to quota configurations stored in the billing database.
-
----
-
-## 6. Billing integration
-
-Billing uses [Stripe](https://stripe.com) for subscription management and usage-based billing.
-
-### 6.1 Subscription management
-
-```yaml
-billing:
-  provider: stripe
-  stripe_secret_key: ${STRIPE_SECRET_KEY}
-  stripe_webhook_secret: ${STRIPE_WEBHOOK_SECRET}
-  stripe_publishable_key: ${STRIPE_PUBLISHABLE_KEY}
-```
-
-**Billing portal:** available at `/billing` in the web UI (owner role only). Powered by Stripe Customer Portal — no custom billing UI needed.
-
-### 6.2 Usage-based billing
-
-LLM token consumption above plan thresholds is billed as overage at the end of each billing period. Usage snapshots are sent to Stripe as `usage_records` on a daily meter.
-
-```elixir
-Stripe.BillingMeterEvent.create(%{
-  event_name: "synapse_llm_tokens",
-  payload: %{
-    stripe_customer_id: tenant.stripe_customer_id,
-    value: daily_token_count
-  },
-  timestamp: end_of_day_unix
-})
-```
-
-### 6.3 Stripe webhook events handled
-
-| Event | Action |
-|-------|--------|
-| `customer.subscription.created` | Provision tenant, set plan quotas |
-| `customer.subscription.updated` | Update plan quotas |
-| `customer.subscription.deleted` | Downgrade to free plan |
-| `invoice.payment_failed` | Notify owner, start grace period |
-| `invoice.payment_succeeded` | Clear any payment-failed flags |
-
----
-
-## 7. Tenant administration
-
-### 7.1 Super-admin panel
-
-A super-admin interface (separate from per-tenant admin) for Synapse operators:
-
-```http
-GET  /v1/admin/tenants              — list all tenants
-GET  /v1/admin/tenants/{id}         — tenant detail + usage
-PUT  /v1/admin/tenants/{id}/quotas  — set custom quotas
-POST /v1/admin/tenants/{id}/suspend — suspend tenant
-DELETE /v1/admin/tenants/{id}       — delete tenant (GDPR)
-```
-
-Super-admin routes require a `super_admin` role, distinct from tenant-level `owner`.
-
-### 7.2 Data deletion (GDPR)
-
-Tenant deletion triggers:
-1. `Astrocyte.forget()` for all banks in the tenant scope
-2. Deletion of all Synapse operational records (councils, schedules, webhooks)
-3. Stripe subscription cancellation
-4. Confirmation email to the tenant owner
-
-Deletion is irreversible. A 30-day soft-delete period (data retained but inaccessible) is offered before permanent deletion for Enterprise tenants.
-
----
-
-## 8. Self-hosted deployments
-
-For self-hosted Synapse, multi-tenancy and billing can be disabled:
-
-```yaml
-# synapse.yaml
-multi_tenancy:
-  enabled: false
-
-billing:
-  enabled: false
-```
-
-In single-tenant mode, all users share one workspace and all quotas are disabled. No Stripe integration is required.
+What Synapse does **not** implement and will not implement: multi-tenancy, quota enforcement, Stripe billing. Those belong in Cerebro.
 
 ---
 
 ## Further reading
 
-- [RBAC](rbac.md) — per-tenant role isolation and owner permissions
-- [Architecture](architecture.md) — tenant_id in AstrocyteContext for memory isolation
-- [Notifications](notifications.md) — payment failure and quota exceeded notifications
-- [Webhooks](webhooks.md) — per-tenant webhook configuration
+- `cerebro-spec.md` (Cerebro repo) — Cerebro product specification
+- `cerebro/docs/_design/deployment-modes.md` — Cerebro hosted vs on-prem modes
+- `architecture.md` — Synapse component architecture
+- `rbac.md` — single-tenant role model in Synapse

@@ -75,6 +75,8 @@ def test_contract_declares_post_b10_endpoints():
     paths = load_contract()["paths"]
 
     expected = {
+        # X-2 — backend metadata (public)
+        "/v1/info",
         # B10 — notification preferences + devices (EE Team+)
         "/v1/notifications/preferences",
         "/v1/notifications/devices",

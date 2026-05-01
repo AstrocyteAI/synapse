@@ -24,6 +24,7 @@ from synapse.routers import (
     centrifugo_router,
     contributions,
     councils,
+    info,
     mcp_compat,
     memory,
     notifications,
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.include_router(info.router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(councils.router, prefix="/v1")
     app.include_router(contributions.router, prefix="/v1")
