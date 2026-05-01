@@ -367,6 +367,7 @@ def test_delete_device_204(_wired_client, headers, db_session):
     token_id = uuid.uuid4()
     device = _make_device(token_id)
     device.principal = "user:user-1"  # jwt.py sets principal = f"user:{sub}"
+    device.tenant_id = "tenant-test"  # match the JWT tenant
     db_session.get = AsyncMock(return_value=device)
     db_session.delete = AsyncMock()
     db_session.commit = AsyncMock()

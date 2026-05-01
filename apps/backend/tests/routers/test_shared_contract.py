@@ -64,3 +64,25 @@ def test_shared_contract_paths_are_present():
         "/v1/audit_logs",
         "/v1/mcp",
     }
+
+
+def test_contract_declares_post_b10_endpoints():
+    """Drift guard — every endpoint added in B10/B11/W9 must be declared.
+
+    When you add a new public endpoint, append it here so the contract stays
+    in sync with the implementation.
+    """
+    paths = load_contract()["paths"]
+
+    expected = {
+        # B10 — notification preferences + devices (EE Team+)
+        "/v1/notifications/preferences",
+        "/v1/notifications/devices",
+        "/v1/notifications/devices/{token_id}",
+        # W9 — notification feed (free tier)
+        "/v1/notifications/feed",
+        # B11 — audit log (admin)
+        "/v1/admin/audit-log",
+    }
+    missing = expected - set(paths)
+    assert not missing, f"OpenAPI contract is missing: {sorted(missing)}"

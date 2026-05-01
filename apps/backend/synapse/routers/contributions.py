@@ -9,7 +9,6 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.council.models import ContributeRequest
 from synapse.council.orchestrator import CouncilOrchestrator
@@ -90,16 +89,8 @@ async def contribute(
                     from synapse.council.session import mark_failed
 
                     async with request.app.state.sessionmaker() as err_db:
+                        # mark_failed emits council.failed audit event internally.
                         await mark_failed(err_db, session_id, error=str(exc))
-                        await audit_emit(
-                            err_db,
-                            "council.failed",
-                            "system",
-                            resource_type="council",
-                            resource_id=str(session_id),
-                            metadata={"error": str(exc)[:256]},
-                        )
-                        await err_db.commit()
 
         asyncio.create_task(_resume())
 

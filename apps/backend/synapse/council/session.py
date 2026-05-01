@@ -118,12 +118,28 @@ async def mark_failed(
     *,
     error: str | None = None,
 ) -> None:
+    """Transition a council to ``failed`` and emit a ``council.failed`` audit event.
+
+    Audit emit is best-effort and uses ``actor_principal="system"`` because
+    failure paths are background tasks that may not have a user context.
+    """
+    from synapse.audit import emit as audit_emit
+
     session = await db.get(CouncilSession, session_id)
     if session:
         session.status = CouncilStatus.failed
         session.closed_at = datetime.now(UTC)
         if error:
             session.config = {**session.config, "_error": error}
+        await audit_emit(
+            db,
+            "council.failed",
+            "system",
+            tenant_id=session.tenant_id,
+            resource_type="council",
+            resource_id=str(session_id),
+            metadata={"error": (error or "")[:256], "created_by": session.created_by},
+        )
         await db.commit()
 
 

@@ -51,6 +51,29 @@ router = APIRouter(tags=["councils"])
 # ---------------------------------------------------------------------------
 
 
+async def _dispatch_summon_safely(
+    dispatcher,
+    app,
+    *,
+    council_id: str,
+    question: str,
+    recipient_principal: str,
+    tenant_id: str | None,
+) -> None:
+    """Wrap dispatch_summon with its own DB session so it can run as a fire-and-forget task."""
+    try:
+        async with app.state.sessionmaker() as db:
+            await dispatcher.dispatch_summon(
+                council_id=council_id,
+                question=question,
+                recipient_principal=recipient_principal,
+                db=db,
+                tenant_id=tenant_id,
+            )
+    except Exception as exc:  # pragma: no cover — never block council pipeline
+        _logger.warning("Summon dispatch failed for %s: %s", recipient_principal, exc)
+
+
 def _get_orchestrator(request: Request) -> CouncilOrchestrator:
     return CouncilOrchestrator(
         astrocyte=request.app.state.astrocyte,
@@ -172,6 +195,24 @@ async def create_council(
             request.app.state.scheduler.schedule_resume(request.app, session_id, deadline)
 
     orchestrator = _get_orchestrator(request)
+
+    # Fire summon notifications for human members of async councils.
+    # Convention (per ContributeRequest docstring): a human member's
+    # `model_id` is the principal string, e.g. "user:alice".
+    dispatcher = getattr(request.app.state, "notification_dispatcher", None)
+    if dispatcher is not None and body.council_type == "async":
+        human_members = [m for m in members if m.member_type == "human" and m.model_id]
+        for hm in human_members:
+            asyncio.create_task(
+                _dispatch_summon_safely(
+                    dispatcher,
+                    request.app,
+                    council_id=str(session_id),
+                    question=body.question,
+                    recipient_principal=hm.model_id,
+                    tenant_id=user.tenant_id,
+                )
+            )
 
     async def _run() -> None:
         async with request.app.state.sessionmaker() as bg_db:
@@ -344,6 +385,16 @@ async def approve_council(
         )
 
     updated = await approve_session(db, session_id)
+    await audit_emit(
+        db,
+        "council.approved",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="council",
+        resource_id=str(session_id),
+        metadata={"verdict_preview": (updated.verdict or "")[:120] if updated else ""},
+    )
+    await db.commit()
     return {
         "session_id": str(session_id),
         "status": updated.status if updated else "closed",

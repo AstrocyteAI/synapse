@@ -85,7 +85,8 @@ async def get_preferences(
 
         result = await db.execute(
             select(NotificationPreferences).where(
-                NotificationPreferences.principal == user.principal
+                NotificationPreferences.principal == user.principal,
+                NotificationPreferences.tenant_id.is_not_distinct_from(user.tenant_id),
             )
         )
         prefs = result.scalar_one_or_none()
@@ -128,7 +129,8 @@ async def update_preferences(
 
         result = await db.execute(
             select(NotificationPreferences).where(
-                NotificationPreferences.principal == user.principal
+                NotificationPreferences.principal == user.principal,
+                NotificationPreferences.tenant_id.is_not_distinct_from(user.tenant_id),
             )
         )
         prefs = result.scalar_one_or_none()
@@ -238,7 +240,10 @@ async def list_devices(
         from sqlalchemy import select
 
         result = await db.execute(
-            select(DeviceToken).where(DeviceToken.principal == user.principal)
+            select(DeviceToken).where(
+                DeviceToken.principal == user.principal,
+                DeviceToken.tenant_id.is_not_distinct_from(user.tenant_id),
+            )
         )
         devices = result.scalars().all()
 
@@ -275,7 +280,11 @@ async def delete_device(
 ) -> None:
     async with request.app.state.sessionmaker() as db:
         device = await db.get(DeviceToken, token_id)
-        if device is None or device.principal != user.principal:
+        if (
+            device is None
+            or device.principal != user.principal
+            or device.tenant_id != user.tenant_id
+        ):
             raise HTTPException(status_code=404, detail="Device token not found")
         await audit_emit(
             db,

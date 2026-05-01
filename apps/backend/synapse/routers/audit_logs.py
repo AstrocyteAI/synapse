@@ -114,3 +114,36 @@ async def list_audit_log(
         count=len(data),
         next_before_id=rows[-1].id if has_more and rows else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Deprecated alias — kept for backward compatibility with the shared contract
+# (originally `GET /v1/audit_logs`). New callers should use /admin/audit-log.
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/audit_logs",
+    response_model=AuditLogResponse,
+    summary="[Deprecated] Use GET /v1/admin/audit-log instead",
+    deprecated=True,
+)
+async def list_audit_log_legacy(
+    limit: int = Query(default=50, ge=1, le=200),
+    before_id: int | None = Query(default=None),
+    principal: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    resource_type: str | None = Query(default=None),
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> Any:
+    """Backward-compatible alias for GET /v1/admin/audit-log."""
+    return await list_audit_log(
+        limit=limit,
+        before_id=before_id,
+        principal=principal,
+        event_type=event_type,
+        resource_type=resource_type,
+        user=user,
+        db=db,
+    )
