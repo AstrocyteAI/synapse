@@ -340,10 +340,12 @@ Python · FastAPI · Centrifugo
 | ✅ **B5 — Deliberation quality** | Multi-round deliberation, convergence detection, red team mode |
 | ✅ **B6 — Workflows** | Conflict detection vs precedents, `pending_approval` status, approval/reject endpoints, `conflict_detected` thread events |
 | ✅ **B7 — Scheduling** | `run_at` on `CreateCouncilRequest`, `scheduled` status, `ScheduledCouncilRunner` (asyncio tasks, DB recovery on startup), deadline enforcement for async councils |
-| **B8 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering |
+| ✅ **B8 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering |
 | ✅ **B9 — RBAC + Webhooks** | API keys (SHA-256, sk- prefix), HMAC-SHA256 outbound webhooks, 3-attempt retry, events: council_closed/conflict_detected/waiting_contributions/pending_approval |
-| **B10 — Notifications** | Email notifications, weekly digest, per-user preferences |
-| **B11 — Multi-tenancy** | Tenant isolation, quota enforcement, Stripe billing (EE) |
+| ✅ **B10 — Notifications** | Email (SMTP) and ntfy push, per-principal preferences, device token CRUD, EE Team+ feature gate |
+| ✅ **B11 — Audit log** | Append-only `audit_events` table, BIGSERIAL cursor pagination, `GET /v1/admin/audit-log`, emit hooks across all security-sensitive transitions |
+| ✅ **B12 — Memory router completeness** | Reflect, retain, forget, graph search/neighbors, compile — bank allow-lists per operation |
+| **B-multi-tenancy** | ❌ **NOT in Synapse.** See [`multi-tenancy.md`](multi-tenancy.md) — Synapse is single-tenant by design. Multi-tenancy lives in **Cerebro** (separate Elixir backend). |
 
 ---
 
@@ -359,10 +361,11 @@ Svelte + SvelteKit · targets the OpenAPI contract
 | ✅ **W4 — Memory explorer** | `GET /v1/memory/search`, `/memory` page with bank switcher, score bars, tag pills |
 | ✅ **W5 — Templates** | Template picker on home page, `GET /v1/templates`, `TemplatePicker.svelte` |
 | ✅ **W6 — Workflows** | `conflict_detected` thread card, amber approval banner, Approve/Reject buttons, `pending_approval` status badge |
-| **W7 — Analytics** | Member leaderboard, decision velocity dashboard, topic clustering |
-| **W8 — Admin** | RBAC management, API keys, webhook registration, MIP routing traces |
-| **W9 — Notifications + preferences** | In-app notification feed, per-user preference settings |
-| **W10 — Multi-tenancy** | Tenant switcher, quota dashboard, billing management (EE) |
+| ✅ **W7 — Analytics** | Member leaderboard, decision velocity, consensus distribution, topic clustering — `/analytics` page |
+| ✅ **W8 — Admin** (audit log viewer) | `/admin/audit-log` page consuming B11, filter bar, cursor pagination, expandable metadata. Auth-gated by `authStore.isAdmin`. |
+| ✅ **W9 — Notifications UI** | `/notifications` feed, `/settings/notifications` preferences + device CRUD, nav bell with unread count via localStorage cursor |
+| ✅ **W10 — Memory router UI** | `/memory` page with Search · Reflect · Store · Graph modes |
+| **W-multi-tenancy** | ❌ **NOT in Synapse web.** Tenant management lives in the [Cerebro Control Plane](https://cerebro/docs/_design/control-plane.md) — a separate Svelte app in the Cerebro repo. |
 
 ---
 
@@ -405,5 +408,21 @@ Tracks are independent but some phases have natural synchronisation points:
 | ✅ Human-in-the-loop API | B1 ✅ | W2 ✅ |
 | ✅ Templates API | B4 ✅ | W5 template picker can ship |
 | ✅ Workflows API | B6 ✅ | W6 ✅ approval UI shipped |
-| Analytics API | B8 complete | W7 dashboard can ship |
-| ✅ Full RBAC + webhooks | B9 ✅ | W8 admin panel can ship |
+| ✅ Analytics API | B8 ✅ | W7 ✅ shipped |
+| ✅ Full RBAC + webhooks | B9 ✅ | W8 ✅ admin viewer shipped |
+| ✅ Notifications API | B10 ✅ | W9 ✅ shipped |
+| ✅ Audit log | B11 ✅ | W8 ✅ shipped |
+
+---
+
+### Track C — Cross-backend contract integrity
+
+Synapse and Cerebro both implement the `synapse-v1.openapi.json` contract. These are the cross-cutting items that keep them honest.
+
+| Phase | Deliverable |
+|-------|-------------|
+| ✅ **X-1** Response shape parity | `tests/routers/test_contract_parity.py` validates live responses against the OpenAPI schema. Mirror in Cerebro `contract_parity_test.exs`. |
+| ✅ **X-2** `/v1/info` endpoint | Public, no auth. Returns backend type (synapse / cerebro), version, multi_tenant + billing flags, feature flags. Implemented in both backends with byte-identical shape. |
+| ✅ **X-3** Backend-aware web | Synapse web fetches `/v1/info` on startup via `backendStore`, surfaces `BackendBadge` in nav. Required for cross-deployment client reuse. |
+| ✅ **X-4** Migration tooling | `synapse migrate export` CLI dumps councils + audit log to JSONL+bundle.json. `POST /v1/admin/migrate/import` in Cerebro consumes it with idempotency, status mapping, partial-success error reporting. Production checklist in cerebro `migration.md §6`. |
+| ✅ **X-5** Drift guard | `contract_drift_test.exs` in Cerebro asserts every contract path is implemented; allowlist documents Cerebro backlog. `test_contract_declares_post_b10_endpoints` in Synapse asserts new paths are declared. |
