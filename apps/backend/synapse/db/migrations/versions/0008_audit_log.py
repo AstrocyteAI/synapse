@@ -26,7 +26,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(128), nullable=True),
         sa.Column("resource_type", sa.String(64), nullable=True),
         sa.Column("resource_id", sa.String(256), nullable=True),
-        sa.Column("event_metadata", JSONB, nullable=False, server_default="'{}'"),
+        sa.Column("event_metadata", JSONB, nullable=False, server_default="{}"),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
