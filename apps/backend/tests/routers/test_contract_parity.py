@@ -102,3 +102,99 @@ def test_info_features_object_matches_declared_keys(contract):
         f"  Declared: {sorted(declared_features)}\n"
         f"  Actual:   {sorted(actual_features)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Static contract drift — every declared response must reference a schema
+# ---------------------------------------------------------------------------
+
+
+def test_every_endpoint_response_has_a_typed_schema(contract):
+    """Every contract endpoint that returns 200/201 must use a $ref'd schema,
+    not a loose ``type: object``. This forces both backends to honour a
+    shared, named shape for every response.
+
+    Endpoints currently exempt are tracked here. As they're tightened, drop
+    them from the allowlist.
+    """
+    loose_allowlist = {
+        # MCP responses are intentionally loose — the tool-result envelope
+        # carries arbitrary payload from the dispatched tool.
+        ("/v1/mcp", "post", "200"),
+        # Memory recall responses pass through Astrocyte payloads verbatim.
+        ("/v1/memory/recall", "get", "200"),
+    }
+
+    untyped: list[tuple[str, str, str]] = []
+    for path, methods in contract["paths"].items():
+        for method, op in methods.items():
+            if method not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            responses = op.get("responses") or {}
+            for status, resp in responses.items():
+                if status not in {"200", "201"}:
+                    continue
+                content = (resp or {}).get("content") or {}
+                schema = content.get("application/json", {}).get("schema") or {}
+                if "$ref" not in schema and (path, method, status) not in loose_allowlist:
+                    untyped.append((path, method, status))
+
+    assert not untyped, (
+        "These response schemas are loose objects without $ref — define a named "
+        "schema in components.schemas for each:\n  "
+        + "\n  ".join(f"{m.upper()} {p} → {s}" for p, m, s in untyped)
+    )
+
+
+# ---------------------------------------------------------------------------
+# Schema completeness — every response $ref must resolve to a declared schema
+# ---------------------------------------------------------------------------
+
+
+def test_every_response_ref_resolves(contract):
+    """Catches typos like $ref: '#/components/schemas/Foo' when Foo doesn't exist."""
+    declared_schemas = set(contract["components"]["schemas"].keys())
+    missing: list[tuple[str, str, str, str]] = []
+
+    for path, methods in contract["paths"].items():
+        for method, op in methods.items():
+            if method not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            for status, resp in (op.get("responses") or {}).items():
+                content = (resp or {}).get("content") or {}
+                schema = content.get("application/json", {}).get("schema") or {}
+                ref = schema.get("$ref")
+                if ref:
+                    name = ref.rsplit("/", 1)[-1]
+                    if name not in declared_schemas:
+                        missing.append((path, method, status, name))
+
+    assert not missing, "Dangling $refs in response schemas:\n  " + "\n  ".join(
+        f"{m.upper()} {p} → {s}: $ref to undeclared schema '{n}'" for p, m, s, n in missing
+    )
+
+
+# ---------------------------------------------------------------------------
+# /v1/notifications/feed — public schema validation (free tier, no auth path
+# returns shape-parity check via static schema even when auth is missing)
+# ---------------------------------------------------------------------------
+
+
+def test_feed_schema_declares_four_item_types(contract):
+    """The X-2 feed contract declares exactly 4 item types — both backends
+    must produce items from this enum and no others."""
+    schema = contract["components"]["schemas"]["NotificationFeedItem"]
+    declared_types = set(schema["properties"]["type"]["enum"])
+
+    expected = {"verdict_ready", "pending_approval", "in_progress", "summon_requested"}
+    assert declared_types == expected, (
+        f"Feed item types drifted.\n  Declared: {sorted(declared_types)}\n"
+        f"  Expected: {sorted(expected)}"
+    )
+
+
+def test_device_token_type_is_currently_only_ntfy(contract):
+    """Both backends restrict device_token.token_type to 'ntfy' until other
+    push transports are added."""
+    schema = contract["components"]["schemas"]["DeviceToken"]
+    assert schema["properties"]["token_type"]["enum"] == ["ntfy"]

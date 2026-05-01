@@ -198,6 +198,35 @@ export interface CompileResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Audit log (B11 / W8)
+// ---------------------------------------------------------------------------
+
+export interface AuditEvent {
+	id: number;
+	event_type: string;
+	actor_principal: string;
+	tenant_id: string | null;
+	resource_type: string | null;
+	resource_id: string | null;
+	metadata: Record<string, unknown>;
+	created_at: string;
+}
+
+export interface AuditLogResponse {
+	data: AuditEvent[];
+	count: number;
+	next_before_id: number | null;
+}
+
+export interface AuditLogFilters {
+	principal?: string;
+	event_type?: string;
+	resource_type?: string;
+	limit?: number;
+	before_id?: number;
+}
+
+// ---------------------------------------------------------------------------
 // Backend metadata (X-2 / X-3)
 // ---------------------------------------------------------------------------
 

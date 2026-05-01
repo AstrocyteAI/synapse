@@ -1,4 +1,6 @@
 import type {
+	AuditLogFilters,
+	AuditLogResponse,
 	BackendInfo,
 	ChatWithVerdictResponse,
 	CouncilDetail,
@@ -244,6 +246,21 @@ export async function getAnalyticsConsensus(): Promise<ConsensusResponse> {
 
 export async function getAnalyticsTopics(limit = 20): Promise<TopicsResponse> {
 	return request(`/v1/analytics/topics?limit=${limit}`);
+}
+
+// ---------------------------------------------------------------------------
+// Audit log (B11 / W8) — admin only
+// ---------------------------------------------------------------------------
+
+export async function getAuditLog(filters: AuditLogFilters = {}): Promise<AuditLogResponse> {
+	const params = new URLSearchParams();
+	if (filters.limit != null) params.set('limit', String(filters.limit));
+	if (filters.before_id != null) params.set('before_id', String(filters.before_id));
+	if (filters.principal) params.set('principal', filters.principal);
+	if (filters.event_type) params.set('event_type', filters.event_type);
+	if (filters.resource_type) params.set('resource_type', filters.resource_type);
+	const qs = params.size ? `?${params}` : '';
+	return request(`/v1/admin/audit-log${qs}`);
 }
 
 // ---------------------------------------------------------------------------

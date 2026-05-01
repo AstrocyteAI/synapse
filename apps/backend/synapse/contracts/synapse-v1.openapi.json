@@ -138,7 +138,7 @@
         "summary": "Get my notification preferences (EE Team+)",
         "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferences" } } } },
           "501": { "description": "Feature not licensed" }
         }
       },
@@ -146,9 +146,9 @@
         "tags": ["Notifications"],
         "summary": "Update my notification preferences (EE Team+)",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferencesUpdate" } } } },
         "responses": {
-          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferences" } } } },
           "501": { "description": "Feature not licensed" }
         }
       }
@@ -159,7 +159,7 @@
         "summary": "List my push notification endpoints (EE Team+)",
         "security": [{ "bearerAuth": [] }],
         "responses": {
-          "200": { "description": "Devices", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "200": { "description": "Devices", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceTokenList" } } } },
           "501": { "description": "Feature not licensed" }
         }
       },
@@ -167,9 +167,9 @@
         "tags": ["Notifications"],
         "summary": "Register a push notification endpoint (EE Team+)",
         "security": [{ "bearerAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object" } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceTokenCreate" } } } },
         "responses": {
-          "201": { "description": "Device registered", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "201": { "description": "Device registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceToken" } } } },
           "501": { "description": "Feature not licensed" }
         }
       }
@@ -196,7 +196,7 @@
           { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 50 } }
         ],
         "responses": {
-          "200": { "description": "Feed", "content": { "application/json": { "schema": { "type": "object" } } } }
+          "200": { "description": "Feed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationFeed" } } } }
         }
       }
     },
@@ -320,12 +320,98 @@
         },
         "required": ["data"]
       },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": ["integer", "string"] },
+          "event_type": { "type": "string" },
+          "actor_principal": { "type": "string" },
+          "tenant_id": { "type": ["string", "null"] },
+          "resource_type": { "type": ["string", "null"] },
+          "resource_id": { "type": ["string", "null"] },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "created_at": { "type": "string" }
+        },
+        "required": ["id", "event_type", "actor_principal", "metadata", "created_at"]
+      },
       "AuditLogListResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "type": "object", "additionalProperties": true } }
+          "data": { "type": "array", "items": { "$ref": "#/components/schemas/AuditEvent" } },
+          "count": { "type": "integer" },
+          "next_before_id": { "type": ["integer", "null"] }
         },
         "required": ["data"]
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "properties": {
+          "email_enabled": { "type": "boolean" },
+          "email_address": { "type": ["string", "null"] },
+          "ntfy_enabled": { "type": "boolean" },
+          "updated_at": { "type": "string" }
+        },
+        "required": ["email_enabled", "email_address", "ntfy_enabled", "updated_at"]
+      },
+      "NotificationPreferencesUpdate": {
+        "type": "object",
+        "properties": {
+          "email_enabled": { "type": "boolean" },
+          "email_address": { "type": ["string", "null"] },
+          "ntfy_enabled": { "type": "boolean" }
+        }
+      },
+      "DeviceToken": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "token_type": { "type": "string", "enum": ["ntfy"] },
+          "token": { "type": "string" },
+          "device_label": { "type": ["string", "null"] },
+          "created_at": { "type": "string" }
+        },
+        "required": ["id", "token_type", "token", "created_at"]
+      },
+      "DeviceTokenCreate": {
+        "type": "object",
+        "properties": {
+          "token_type": { "type": "string", "enum": ["ntfy"], "default": "ntfy" },
+          "token": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "device_label": { "type": ["string", "null"], "maxLength": 128 }
+        },
+        "required": ["token"]
+      },
+      "DeviceTokenList": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "devices": { "type": "array", "items": { "$ref": "#/components/schemas/DeviceToken" } }
+        },
+        "required": ["count", "devices"]
+      },
+      "NotificationFeedItem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["verdict_ready", "pending_approval", "in_progress", "summon_requested"]
+          },
+          "council_id": { "type": "string" },
+          "question": { "type": "string" },
+          "verdict": { "type": ["string", "null"] },
+          "confidence_label": { "type": ["string", "null"] },
+          "consensus_score": { "type": ["number", "null"] },
+          "occurred_at": { "type": ["string", "null"] }
+        },
+        "required": ["type", "council_id", "question", "occurred_at"]
+      },
+      "NotificationFeed": {
+        "type": "object",
+        "properties": {
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/NotificationFeedItem" } },
+          "count": { "type": "integer" }
+        },
+        "required": ["items", "count"]
       },
       "MCPRequest": {
         "type": "object",

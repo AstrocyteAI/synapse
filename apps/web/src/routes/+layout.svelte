@@ -3,6 +3,7 @@
 	import { getToken } from '$lib/api/client';
 	import { getNotificationFeed } from '$lib/api/client';
 	import { backendStore } from '$lib/stores/backend.svelte';
+	import { authStore } from '$lib/stores/auth.svelte';
 	import BackendBadge from '$lib/components/BackendBadge.svelte';
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
@@ -80,6 +81,18 @@
 					{link.label}
 				</a>
 			{/each}
+
+			{#if authStore.isAdmin}
+				<a
+					href="/admin/audit-log"
+					class="rounded-lg px-3 py-1.5 text-sm transition-colors
+						{($page.url.pathname as string).startsWith('/admin')
+						? 'bg-amber-500/15 text-amber-300'
+						: 'text-amber-400/70 hover:text-amber-300'}"
+				>
+					Admin
+				</a>
+			{/if}
 		</nav>
 
 		<div class="ml-auto flex items-center gap-3">
