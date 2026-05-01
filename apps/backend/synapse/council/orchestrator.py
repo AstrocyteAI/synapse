@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from synapse.audit import emit as audit_emit
 from synapse.council.conflict import check_conflict
 from synapse.council.convergence import check_convergence
 from synapse.council.models import (
@@ -668,6 +669,21 @@ class CouncilOrchestrator:
                 deliberation_rounds=deliberation_rounds,
             )
             db.add(transcript)
+            await audit_emit(
+                db,
+                "council.closed"
+                if final_status == CouncilStatus.closed
+                else "council.pending_approval",
+                session.created_by,
+                tenant_id=session.tenant_id,
+                resource_type="council",
+                resource_id=council_id,
+                metadata={
+                    "verdict_preview": (synthesis.verdict or "")[:120],
+                    "consensus_score": ranking_result.consensus_score,
+                    "confidence_label": synthesis.confidence_label,
+                },
+            )
             await db.commit()
 
         # --- Fire webhooks (B9) ---

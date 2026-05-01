@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -123,8 +124,11 @@ async def test_consensus_distribution_empty():
 
 @pytest.mark.asyncio
 async def test_decision_velocity_fills_zero_days():
+    # Use a relative date so the test stays valid regardless of when it runs.
+    data_day = (datetime.now(UTC).date() - timedelta(days=3)).isoformat()
+
     # DB only returns 1 day with data; remaining days must be zero-filled
-    rows = [{"day": "2026-04-20", "cnt": 5}]
+    rows = [{"day": data_day, "cnt": 5}]
     db = _make_db(mappings=rows)
 
     result = await decision_velocity(db, tenant_id=None, days=7)
@@ -141,10 +145,10 @@ async def test_decision_velocity_fills_zero_days():
 
     # The one day with data must have count=5
     day_map = {e["date"]: e["count"] for e in result}
-    assert day_map.get("2026-04-20") == 5
+    assert day_map.get(data_day) == 5
 
     # All other days must have count=0
-    zero_days = [e for e in result if e["date"] != "2026-04-20"]
+    zero_days = [e for e in result if e["date"] != data_day]
     assert all(e["count"] == 0 for e in zero_days)
 
 

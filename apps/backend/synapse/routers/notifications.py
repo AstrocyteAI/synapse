@@ -13,6 +13,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
 
+from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.db.models import DeviceToken, NotificationPreferences
 
@@ -146,6 +147,15 @@ async def update_preferences(
             prefs.ntfy_enabled = body.ntfy_enabled
             prefs.updated_at = now
 
+        await audit_emit(
+            db,
+            "notification_prefs.updated",
+            user.principal,
+            tenant_id=user.tenant_id,
+            resource_type="notification_preferences",
+            resource_id=user.principal,
+            metadata={"email_enabled": body.email_enabled, "ntfy_enabled": body.ntfy_enabled},
+        )
         await db.commit()
         await db.refresh(prefs)
 
@@ -186,6 +196,15 @@ async def register_device(
 
     async with request.app.state.sessionmaker() as db:
         db.add(device)
+        await audit_emit(
+            db,
+            "device_token.registered",
+            user.principal,
+            tenant_id=user.tenant_id,
+            resource_type="device_token",
+            resource_id=str(device.id),
+            metadata={"token_type": body.token_type, "device_label": body.device_label},
+        )
         await db.commit()
         await db.refresh(device)
 
@@ -255,5 +274,14 @@ async def delete_device(
         device = await db.get(DeviceToken, token_id)
         if device is None or device.principal != user.principal:
             raise HTTPException(status_code=404, detail="Device token not found")
+        await audit_emit(
+            db,
+            "device_token.deleted",
+            user.principal,
+            tenant_id=user.tenant_id,
+            resource_type="device_token",
+            resource_id=str(token_id),
+            metadata={"token_type": device.token_type},
+        )
         await db.delete(device)
         await db.commit()

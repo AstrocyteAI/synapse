@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, generate_api_key, get_current_user
 from synapse.db.models import ApiKey
 from synapse.db.session import get_session as get_db_session
@@ -76,6 +77,15 @@ async def create_api_key(
         created_at=datetime.now(UTC),
     )
     db.add(api_key)
+    await audit_emit(
+        db,
+        "api_key.created",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="api_key",
+        resource_id=str(api_key.id),
+        metadata={"name": body.name, "roles": body.roles},
+    )
     await db.commit()
     await db.refresh(api_key)
 
@@ -139,4 +149,13 @@ async def revoke_api_key(
         raise HTTPException(status_code=409, detail="API key is already revoked")
 
     api_key.revoked_at = datetime.now(UTC)
+    await audit_emit(
+        db,
+        "api_key.revoked",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="api_key",
+        resource_id=str(key_id),
+        metadata={"name": api_key.name},
+    )
     await db.commit()

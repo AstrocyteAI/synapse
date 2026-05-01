@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.council.models import (
     CouncilMember,
@@ -114,6 +115,19 @@ async def create_council(
         tenant_id=user.tenant_id,
     )
     session_id = council_session.id
+    await audit_emit(
+        db,
+        "council.created",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="council",
+        resource_id=str(session_id),
+        metadata={
+            "question_preview": body.question[:120],
+            "council_type": body.council_type or "llm",
+            "member_count": len(members),
+        },
+    )
 
     # Create the thread that backs this council's chat surface
     thread = await create_thread(

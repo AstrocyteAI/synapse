@@ -327,3 +327,33 @@ class DeviceToken(Base):
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+# ---------------------------------------------------------------------------
+# B11 — Audit log
+# ---------------------------------------------------------------------------
+
+
+class AuditEvent(Base):
+    """Immutable append-only audit trail for security-sensitive actions.
+
+    ``id`` is a BIGSERIAL used as both ordering primitive and pagination cursor.
+    Rows are never updated or deleted — retention is managed by DB-level
+    partitioning or a periodic archival job outside the application.
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    actor_principal: Mapped[str] = mapped_column(String(256), nullable=False)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    resource_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Named event_metadata on the Python side; "metadata" is reserved by SQLAlchemy.
+    event_metadata: Mapped[dict[str, Any]] = mapped_column(
+        "event_metadata", JSONB, nullable=False, default=dict
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )

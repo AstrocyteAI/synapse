@@ -12,6 +12,7 @@ from pydantic import BaseModel, HttpUrl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.db.models import Webhook
 from synapse.db.session import get_session as get_db_session
@@ -88,6 +89,15 @@ async def create_webhook(
         created_at=datetime.now(UTC),
     )
     db.add(webhook)
+    await audit_emit(
+        db,
+        "webhook.created",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="webhook",
+        resource_id=str(webhook.id),
+        metadata={"url": url_str, "events": body.events},
+    )
     await db.commit()
     await db.refresh(webhook)
 
@@ -145,4 +155,13 @@ async def deactivate_webhook(
         raise HTTPException(status_code=403, detail="Cannot deactivate this webhook")
 
     webhook.active = False
+    await audit_emit(
+        db,
+        "webhook.deleted",
+        user.principal,
+        tenant_id=user.tenant_id,
+        resource_type="webhook",
+        resource_id=str(wh_id),
+        metadata={"url": webhook.url},
+    )
     await db.commit()

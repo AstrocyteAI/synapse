@@ -225,7 +225,13 @@ def test_put_preferences_creates_row_when_none_exists(_wired_client, headers, db
         headers=headers,
     )
     assert resp.status_code == 200
-    db_session.add.assert_called_once()
+    # add() is called twice: once for the NotificationPreferences row and
+    # once for the AuditEvent row emitted by B11's audit helper.
+    from synapse.db.models import AuditEvent, NotificationPreferences
+
+    added_types = [type(call.args[0]) for call in db_session.add.call_args_list]
+    assert NotificationPreferences in added_types
+    assert AuditEvent in added_types
     db_session.commit.assert_awaited_once()
 
 
