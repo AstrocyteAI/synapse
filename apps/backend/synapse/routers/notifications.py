@@ -10,12 +10,15 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from synapse.audit import emit as audit_emit
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
-from synapse.db.models import DeviceToken, NotificationPreferences
+from synapse.db.models import CouncilSession, CouncilStatus, DeviceToken, NotificationPreferences
+from synapse.db.session import get_session as get_db_session
 
 router = APIRouter(tags=["notifications"])
 
@@ -285,3 +288,86 @@ async def delete_device(
         )
         await db.delete(device)
         await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# GET /v1/notifications/feed  — FREE tier, no EE gate
+# ---------------------------------------------------------------------------
+
+
+class FeedItem(BaseModel):
+    type: str  # "verdict_ready" | "pending_approval" | "in_progress" | "summon_requested"
+    council_id: str
+    question: str
+    verdict: str | None = None
+    confidence_label: str | None = None
+    consensus_score: float | None = None
+    occurred_at: str  # ISO timestamp (closed_at for verdicts, created_at for others)
+
+
+class NotificationFeedResponse(BaseModel):
+    items: list[FeedItem]
+    count: int
+
+
+@router.get(
+    "/notifications/feed",
+    response_model=NotificationFeedResponse,
+    summary="Recent notification feed for the current user (free tier)",
+)
+async def get_notification_feed(
+    limit: int = Query(default=20, ge=1, le=50),
+    user: AuthenticatedUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+) -> NotificationFeedResponse:
+    """Return recent council lifecycle events relevant to the current user.
+
+    Includes:
+    - ``verdict_ready``      — council reached a verdict (status=closed)
+    - ``pending_approval``   — council needs human approval (conflict detected)
+    - ``in_progress``        — council is actively running
+    - ``summon_requested``   — async council awaiting the user's contribution
+
+    Not EE-gated — all plans can view the feed.
+    """
+    # Verdicts + pending approval + in-progress — councils the user created
+    stmt = (
+        select(CouncilSession)
+        .where(CouncilSession.created_by == user.principal)
+        .order_by(desc(CouncilSession.created_at))
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    sessions = result.scalars().all()
+
+    items: list[FeedItem] = []
+    for s in sessions:
+        if s.status == CouncilStatus.closed:
+            item_type = "verdict_ready"
+            occurred_at = (s.closed_at or s.created_at).isoformat()
+        elif s.status == CouncilStatus.pending_approval:
+            item_type = "pending_approval"
+            occurred_at = (s.closed_at or s.created_at).isoformat()
+        elif s.status == CouncilStatus.waiting_contributions:
+            item_type = "summon_requested"
+            occurred_at = s.created_at.isoformat()
+        elif s.status in (CouncilStatus.stage_1, CouncilStatus.stage_2, CouncilStatus.stage_3):
+            item_type = "in_progress"
+            occurred_at = s.created_at.isoformat()
+        else:
+            # pending / scheduled / failed — skip
+            continue
+
+        items.append(
+            FeedItem(
+                type=item_type,
+                council_id=str(s.id),
+                question=s.question,
+                verdict=s.verdict,
+                confidence_label=s.confidence_label,
+                consensus_score=s.consensus_score,
+                occurred_at=occurred_at,
+            )
+        )
+
+    return NotificationFeedResponse(items=items, count=len(items))
