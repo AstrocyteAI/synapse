@@ -5,10 +5,14 @@ import type {
 	ConsensusResponse,
 	CompileResponse,
 	CreateCouncilResponse,
+	DeviceToken,
+	DeviceTokenListResponse,
 	GraphNeighborsResponse,
 	GraphSearchResponse,
 	MembersResponse,
 	MemorySearchResponse,
+	NotificationFeedResponse,
+	NotificationPreferences,
 	ReflectResponse,
 	RetainResponse,
 	Template,
@@ -239,6 +243,50 @@ export async function getAnalyticsConsensus(): Promise<ConsensusResponse> {
 
 export async function getAnalyticsTopics(limit = 20): Promise<TopicsResponse> {
 	return request(`/v1/analytics/topics?limit=${limit}`);
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (B10 / W9)
+// ---------------------------------------------------------------------------
+
+export async function getNotificationPreferences(): Promise<NotificationPreferences> {
+	return request('/v1/notifications/preferences');
+}
+
+export async function updateNotificationPreferences(prefs: {
+	email_enabled: boolean;
+	email_address?: string | null;
+	ntfy_enabled: boolean;
+}): Promise<NotificationPreferences> {
+	return request('/v1/notifications/preferences', {
+		method: 'PUT',
+		body: JSON.stringify(prefs)
+	});
+}
+
+export async function listDeviceTokens(): Promise<DeviceTokenListResponse> {
+	return request('/v1/notifications/devices');
+}
+
+export async function registerDeviceToken(
+	token: string,
+	deviceLabel?: string
+): Promise<DeviceToken> {
+	return request('/v1/notifications/devices', {
+		method: 'POST',
+		body: JSON.stringify({ token, device_label: deviceLabel ?? null })
+	});
+}
+
+export async function deleteDeviceToken(tokenId: string): Promise<void> {
+	await fetch(`${API_BASE}/v1/notifications/devices/${tokenId}`, {
+		method: 'DELETE',
+		headers: authHeaders() as Record<string, string>
+	});
+}
+
+export async function getNotificationFeed(limit = 20): Promise<NotificationFeedResponse> {
+	return request(`/v1/notifications/feed?limit=${limit}`);
 }
 
 // ---------------------------------------------------------------------------

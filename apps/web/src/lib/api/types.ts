@@ -197,6 +197,51 @@ export interface CompileResponse {
 	scopes?: string[];
 }
 
+// ---------------------------------------------------------------------------
+// Notifications (B10 / W9)
+// ---------------------------------------------------------------------------
+
+export interface NotificationPreferences {
+	email_enabled: boolean;
+	email_address: string | null;
+	ntfy_enabled: boolean;
+	updated_at: string;
+}
+
+export interface DeviceToken {
+	id: string;
+	token_type: string;
+	token: string;
+	device_label: string | null;
+	created_at: string;
+}
+
+export interface DeviceTokenListResponse {
+	count: number;
+	devices: DeviceToken[];
+}
+
+export type FeedItemType =
+	| 'verdict_ready'
+	| 'pending_approval'
+	| 'in_progress'
+	| 'summon_requested';
+
+export interface FeedItem {
+	type: FeedItemType;
+	council_id: string;
+	question: string;
+	verdict: string | null;
+	confidence_label: string | null;
+	consensus_score: number | null;
+	occurred_at: string;
+}
+
+export interface NotificationFeedResponse {
+	items: FeedItem[];
+	count: number;
+}
+
 export type CouncilStatus =
 	| 'pending'
 	| 'stage_1'

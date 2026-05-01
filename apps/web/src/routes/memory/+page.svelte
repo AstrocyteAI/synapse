@@ -305,10 +305,10 @@
 		{/if}
 
 		{#if loading}
-			<_Spinner label="Searching {selectedBank}…" />
+			{@render _Spinner({ label: `Searching ${selectedBank}…` })}
 		{:else if searched}
 			{#if hits.length === 0}
-				<_Empty label="No results in {selectedBank}." sub="Try broader terms or a different bank." />
+				{@render _Empty({ label: `No results in ${selectedBank}.`, sub: "Try broader terms or a different bank." })}
 			{:else}
 				<p class="text-xs text-zinc-500">
 					{hits.length} result{hits.length === 1 ? '' : 's'} in <span class="text-zinc-400">{selectedBank}</span>
@@ -320,7 +320,7 @@
 				</div>
 			{/if}
 		{:else}
-			<_Idle />
+			{@render _Idle()}
 		{/if}
 
 	<!-- ======================================================================
@@ -366,7 +366,7 @@
 		{/if}
 
 		{#if loading}
-			<_Spinner label="Synthesising answer from {reflectBank}…" />
+			{@render _Spinner({ label: `Synthesising answer from ${reflectBank}…` })}
 		{:else if reflectAnswer}
 			<div class="rounded-xl border border-indigo-800/50 bg-indigo-950/20 p-5">
 				<p class="text-sm leading-relaxed text-zinc-200">{reflectAnswer}</p>
@@ -393,9 +393,9 @@
 				{/if}
 			</div>
 		{:else if searched}
-			<_Empty label="No answer returned." sub="The bank may not have relevant memories." />
+			{@render _Empty({ label: "No answer returned.", sub: "The bank may not have relevant memories." })}
 		{:else}
-			<_Idle />
+			{@render _Idle()}
 		{/if}
 
 	<!-- ======================================================================
@@ -482,7 +482,7 @@
 
 			<!-- Entity results -->
 			{#if loading}
-				<_Spinner label="Searching graph…" />
+				{@render _Spinner({ label: "Searching graph…" })}
 			{:else if graphEntities.length > 0}
 				<div>
 					<p class="mb-2 text-xs text-zinc-500">
@@ -509,9 +509,9 @@
 					</div>
 				</div>
 			{:else if searched}
-				<_Empty label="No entities found." sub="Try a different name or bank." />
+				{@render _Empty({ label: "No entities found.", sub: "Try a different name or bank." })}
 			{:else if !query}
-				<_Idle />
+				{@render _Idle()}
 			{/if}
 
 			<!-- Neighbor memories -->
@@ -522,9 +522,9 @@
 					</p>
 
 					{#if loadingNeighbors}
-						<_Spinner label="Traversing graph…" />
+						{@render _Spinner({ label: "Traversing graph…" })}
 					{:else if graphNeighborHits.length === 0}
-						<_Empty label="No connected memories." sub="This entity has no memory edges yet." />
+						{@render _Empty({ label: "No connected memories.", sub: "This entity has no memory edges yet." })}
 					{:else}
 						<div class="flex flex-col gap-3">
 							{#each graphNeighborHits as hit (hit.memory_id)}
