@@ -22,7 +22,7 @@ jobs:
 
     permissions:
       contents: read
-      packages: read  # pull ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py
+      packages: read  # pull ghcr.io/astrocyteai/astrocyte/astrocyte-{gateway-py,postgres}
 
     steps:
       - name: Checkout synapse
@@ -34,12 +34,10 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           # GHCR_TOKEN = classic PAT with read:packages scope (needed while
-          # ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py is private).
-          # Once the package is made public this secret is no longer required.
+          # the astrocyte images at ghcr.io/astrocyteai/astrocyte/* are
+          # private). Once the packages are made public this secret is no
+          # longer required.
           password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Build astrocyte-postgres image (pgvector + AGE)
-        run: docker build --tag synapse/astrocyte-postgres:ci docker/astrocyte-postgres/
 
       - name: Start backing services
         run: |

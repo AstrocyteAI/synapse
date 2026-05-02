@@ -110,14 +110,3 @@ jobs:
           path: apps/backend/coverage.xml
           retention-days: 7
 
-  docker-build:
-    name: Build astrocyte-postgres image (pgvector + AGE)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Build custom astrocyte-postgres image
-        run: docker build --tag synapse/astrocyte-postgres:ci docker/astrocyte-postgres/

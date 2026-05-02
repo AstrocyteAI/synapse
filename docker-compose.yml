@@ -115,11 +115,14 @@ services:
 
   # ---------------------------------------------------------------------------
   # Astrocyte PostgreSQL (pgvector + Apache AGE)
+  #
+  # Pulls the canonical image published by the Astrocyte release pipeline.
+  # Synapse does not maintain its own Postgres-with-extensions Dockerfile —
+  # the image is part of Astrocyte's release set and ships from the
+  # AstrocyteAI/astrocyte repo's release workflow alongside the gateway.
   # ---------------------------------------------------------------------------
   astrocyte-postgres:
-    build:
-      context: docker/astrocyte-postgres
-      dockerfile: Dockerfile
+    image: ghcr.io/astrocyteai/astrocyte/astrocyte-postgres:${ASTROCYTE_IMAGE_TAG:-latest}
     environment:
       POSTGRES_USER: astrocyte
       POSTGRES_PASSWORD: astrocyte
