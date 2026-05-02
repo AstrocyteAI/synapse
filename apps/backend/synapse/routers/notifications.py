@@ -25,6 +25,11 @@ router = APIRouter(tags=["notifications"])
 _FEATURE = "notifications"
 
 
+def _require_admin(user: AuthenticatedUser) -> None:
+    if "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="admin role required")
+
+
 def _require_feature(request: Request) -> None:
     ff = request.app.state.feature_flags
     if not ff.is_enabled(_FEATURE):
@@ -384,3 +389,110 @@ async def get_notification_feed(
         )
 
     return NotificationFeedResponse(items=items, count=len(items))
+
+
+# ---------------------------------------------------------------------------
+# Admin export endpoints — migration use only (X-4)
+# ---------------------------------------------------------------------------
+
+
+class PreferencesExportOut(BaseModel):
+    id: str
+    principal: str
+    email_enabled: bool
+    email_address: str | None
+    ntfy_enabled: bool
+    updated_at: str
+
+
+class DeviceTokenExportOut(BaseModel):
+    id: str
+    principal: str
+    token_type: str
+    token: str
+    device_label: str | None
+    created_at: str
+    last_used_at: str | None
+
+
+@router.get(
+    "/admin/notifications/preferences",
+    summary="[Migration export] List all notification preferences (admin only)",
+)
+async def admin_list_preferences(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Dump all notification preferences for migration to Cerebro (X-4).
+
+    Returns preferences for every principal in this deployment. Requires the
+    ``admin`` role. Not EE-gated — the data must be portable regardless of
+    whether the EE notifications feature is currently licensed.
+    """
+    _require_admin(user)
+
+    async with request.app.state.sessionmaker() as db:
+        result = await db.execute(
+            select(NotificationPreferences)
+            .order_by(NotificationPreferences.updated_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = result.scalars().all()
+
+    return {
+        "count": len(rows),
+        "data": [
+            PreferencesExportOut(
+                id=str(r.id),
+                principal=r.principal,
+                email_enabled=r.email_enabled,
+                email_address=r.email_address,
+                ntfy_enabled=r.ntfy_enabled,
+                updated_at=r.updated_at.isoformat(),
+            )
+            for r in rows
+        ],
+    }
+
+
+@router.get(
+    "/admin/notifications/devices",
+    summary="[Migration export] List all device tokens (admin only)",
+)
+async def admin_list_devices(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Dump all device tokens for migration to Cerebro (X-4).
+
+    Returns device tokens for every principal in this deployment. Requires
+    the ``admin`` role.
+    """
+    _require_admin(user)
+
+    async with request.app.state.sessionmaker() as db:
+        result = await db.execute(
+            select(DeviceToken).order_by(DeviceToken.created_at).limit(limit).offset(offset)
+        )
+        rows = result.scalars().all()
+
+    return {
+        "count": len(rows),
+        "data": [
+            DeviceTokenExportOut(
+                id=str(r.id),
+                principal=r.principal,
+                token_type=r.token_type,
+                token=r.token,
+                device_label=r.device_label,
+                created_at=r.created_at.isoformat(),
+                last_used_at=r.last_used_at.isoformat() if r.last_used_at else None,
+            )
+            for r in rows
+        ],
+    }

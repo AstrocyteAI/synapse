@@ -97,6 +97,8 @@ RESOURCES: list[tuple[str, str, callable]] = [
     ("audit_events.jsonl", "/v1/admin/audit-log", lambda c, _p: _export_audit_log(c)),
     # NOTE: thread events are nested under each council; per-council export is
     #       deferred to a future iteration of this script.
+    ("notification_prefs.jsonl", "/v1/admin/notifications/preferences", _paginate),
+    ("devices.jsonl", "/v1/admin/notifications/devices", _paginate),
 ]
 
 
@@ -147,6 +149,8 @@ def export(base_url: str, token: str, output: Path) -> dict[str, int]:
     resource_to_key = {
         "councils.jsonl": "councils",
         "audit_events.jsonl": "audit_events",
+        "notification_prefs.jsonl": "notification_prefs",
+        "devices.jsonl": "device_tokens",
     }
     bundle: dict = {"manifest": manifest}
     for filename, rows in rows_by_resource.items():
