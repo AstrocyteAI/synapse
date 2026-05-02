@@ -291,9 +291,7 @@ class TestAdminListDeviceTokens:
     def test_returns_200_with_devices(self, client, db_session):
         device = _make_device()
         db_session.execute = AsyncMock(
-            return_value=MagicMock(
-                scalars=MagicMock(return_value=MagicMock(all=lambda: [device]))
-            )
+            return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [device])))
         )
 
         resp = client.get("/v1/admin/notifications/devices", headers=_admin_headers())
