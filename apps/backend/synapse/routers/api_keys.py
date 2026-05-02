@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -164,3 +164,69 @@ async def revoke_api_key(
         metadata={"name": api_key.name},
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Admin export endpoint — migration use only (X-4)
+# ---------------------------------------------------------------------------
+
+
+class ApiKeyExportOut(BaseModel):
+    id: str
+    name: str
+    key_prefix: str
+    roles: list[str]
+    created_by: str
+    created_at: str
+    last_used_at: str | None
+
+
+@router.get(
+    "/admin/api-keys",
+    summary="[Migration export] List all API keys — metadata only (admin only)",
+)
+async def admin_list_api_keys(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Dump API key metadata for migration to Cerebro (X-4).
+
+    Returns non-revoked keys for every principal in this deployment. Requires
+    the ``admin`` role.
+
+    IMPORTANT: Raw key material is never stored and cannot be exported. The
+    Cerebro importer records this list as a re-issuance manifest — operators
+    must create new API keys in Cerebro and redistribute them to their
+    integrations.
+    """
+    if "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="admin role required")
+
+    async with request.app.state.sessionmaker() as db:
+        result = await db.execute(
+            select(ApiKey)
+            .where(ApiKey.revoked_at.is_(None))
+            .order_by(ApiKey.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        rows = result.scalars().all()
+
+    return {
+        "count": len(rows),
+        "note": "Raw key material is not exportable. Re-issue these keys in Cerebro.",
+        "data": [
+            ApiKeyExportOut(
+                id=str(r.id),
+                name=r.name,
+                key_prefix=r.key_prefix,
+                roles=list(r.roles),
+                created_by=r.created_by,
+                created_at=r.created_at.isoformat(),
+                last_used_at=r.last_used_at.isoformat() if r.last_used_at else None,
+            )
+            for r in rows
+        ],
+    }

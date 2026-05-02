@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, HttpUrl
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -170,3 +170,65 @@ async def deactivate_webhook(
         metadata={"url": webhook.url},
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Admin export endpoint — migration use only (X-4)
+# ---------------------------------------------------------------------------
+
+
+class WebhookExportOut(BaseModel):
+    id: str
+    url: str
+    events: list[str]
+    secret: str  # plain HMAC signing secret — exported for migration continuity
+    active: bool
+    created_by: str
+    created_at: str
+    last_delivery_at: str | None
+
+
+@router.get(
+    "/admin/webhooks",
+    summary="[Migration export] List all webhooks including signing secrets (admin only)",
+)
+async def admin_list_webhooks(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    request: Request = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Dump all webhooks (including secrets) for migration to Cerebro (X-4).
+
+    Returns webhooks for every principal in this deployment. Requires the
+    ``admin`` role.
+
+    The ``secret`` field is the plain HMAC signing key. It is included here
+    (and only here) so that existing webhook consumers do not need to update
+    their signature-verification setup after migration.
+    """
+    if "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="admin role required")
+
+    async with request.app.state.sessionmaker() as db:
+        result = await db.execute(
+            select(Webhook).order_by(Webhook.created_at).limit(limit).offset(offset)
+        )
+        rows = result.scalars().all()
+
+    return {
+        "count": len(rows),
+        "data": [
+            WebhookExportOut(
+                id=str(r.id),
+                url=r.url,
+                events=list(r.events),
+                secret=r.secret,
+                active=r.active,
+                created_by=r.created_by,
+                created_at=r.created_at.isoformat(),
+                last_delivery_at=r.last_delivery_at.isoformat() if r.last_delivery_at else None,
+            )
+            for r in rows
+        ],
+    }

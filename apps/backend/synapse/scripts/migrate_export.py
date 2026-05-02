@@ -99,6 +99,8 @@ RESOURCES: list[tuple[str, str, callable]] = [
     #       deferred to a future iteration of this script.
     ("notification_prefs.jsonl", "/v1/admin/notifications/preferences", _paginate),
     ("devices.jsonl", "/v1/admin/notifications/devices", _paginate),
+    ("api_keys.jsonl", "/v1/admin/api-keys", _paginate),
+    ("webhooks.jsonl", "/v1/admin/webhooks", _paginate),
 ]
 
 
@@ -151,6 +153,8 @@ def export(base_url: str, token: str, output: Path) -> dict[str, int]:
         "audit_events.jsonl": "audit_events",
         "notification_prefs.jsonl": "notification_prefs",
         "devices.jsonl": "device_tokens",
+        "api_keys.jsonl": "api_keys",
+        "webhooks.jsonl": "webhooks",
     }
     bundle: dict = {"manifest": manifest}
     for filename, rows in rows_by_resource.items():

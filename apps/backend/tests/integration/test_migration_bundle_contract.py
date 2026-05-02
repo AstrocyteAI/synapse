@@ -89,6 +89,70 @@ def _audit_event(seq: int) -> dict:
     }
 
 
+def _notification_pref(principal: str = "user:alice") -> dict:
+    return {
+        "id": "aaaaaaaa-1111-1111-1111-aaaaaaaaaaaa",
+        "principal": principal,
+        "email_enabled": True,
+        "email_address": "alice@example.com",
+        "ntfy_enabled": False,
+        "updated_at": "2026-04-01T10:00:00Z",
+    }
+
+
+def _device_token(principal: str = "user:alice") -> dict:
+    return {
+        "id": "bbbbbbbb-2222-2222-2222-bbbbbbbbbbbb",
+        "principal": principal,
+        "token_type": "ntfy",
+        "token": "synapse-9c1a4f1e-...",
+        "device_label": "Alice's iPhone",
+        "created_at": "2026-04-01T10:00:00Z",
+        "last_used_at": None,
+    }
+
+
+def _api_key() -> dict:
+    return {
+        "id": "cccccccc-3333-3333-3333-cccccccccccc",
+        "name": "ci-bot",
+        "key_prefix": "sk-12345678",
+        "roles": ["member"],
+        "created_by": "user:alice",
+        "created_at": "2026-04-01T10:00:00Z",
+        "last_used_at": None,
+    }
+
+
+def _webhook() -> dict:
+    return {
+        "id": "dddddddd-4444-4444-4444-dddddddddddd",
+        "url": "https://hooks.example.com/incoming",
+        "events": ["council.closed"],
+        "secret": "whsec_test_value",
+        "active": True,
+        "created_by": "user:alice",
+        "created_at": "2026-04-01T10:00:00Z",
+        "last_delivery_at": None,
+    }
+
+
+def _mock_empty_admin_endpoints(base_url: str) -> None:
+    """The four admin export endpoints added by S-MIG-EXPAND. The
+    export tool calls all of them on every run; tests that don't care
+    about their content register an empty single-page response so the
+    export completes without RESPX:not-mocked errors."""
+    for path in (
+        "/v1/admin/notifications/preferences",
+        "/v1/admin/notifications/devices",
+        "/v1/admin/api-keys",
+        "/v1/admin/webhooks",
+    ):
+        respx.get(f"{base_url}{path}").mock(
+            return_value=httpx.Response(200, json={"data": [], "count": 0})
+        )
+
+
 @respx.mock
 def test_export_produces_schema_valid_bundle(
     tmp_path: Path,
@@ -126,12 +190,31 @@ def test_export_produces_schema_valid_bundle(
         )
     )
 
+    # S-MIG-EXPAND admin endpoints — non-empty so we can assert the
+    # bundle carries them through to the wire shape Cerebro consumes.
+    respx.get(f"{synapse_base_url}/v1/admin/notifications/preferences").mock(
+        return_value=httpx.Response(200, json={"data": [_notification_pref()], "count": 1})
+    )
+    respx.get(f"{synapse_base_url}/v1/admin/notifications/devices").mock(
+        return_value=httpx.Response(200, json={"data": [_device_token()], "count": 1})
+    )
+    respx.get(f"{synapse_base_url}/v1/admin/api-keys").mock(
+        return_value=httpx.Response(200, json={"data": [_api_key()], "count": 1})
+    )
+    respx.get(f"{synapse_base_url}/v1/admin/webhooks").mock(
+        return_value=httpx.Response(200, json={"data": [_webhook()], "count": 1})
+    )
+
     output = tmp_path / "dump"
     counts = migrate_export.export(synapse_base_url, admin_token, output)
 
-    # Sanity on the Python return value
+    # Sanity on the Python return value — every resource flows through
     assert counts["councils.jsonl"] == 2
     assert counts["audit_events.jsonl"] == 2
+    assert counts["notification_prefs.jsonl"] == 1
+    assert counts["devices.jsonl"] == 1
+    assert counts["api_keys.jsonl"] == 1
+    assert counts["webhooks.jsonl"] == 1
 
     # The bundle.json is the wire artifact Cerebro consumes — validate against schema
     bundle = json.loads((output / "bundle.json").read_text())
@@ -148,6 +231,13 @@ def test_export_produces_schema_valid_bundle(
     # Status mapping is the Cerebro side's responsibility — but the source
     # status MUST be present so the importer can map it.
     assert all("status" in c for c in bundle["councils"])
+
+    # S-MIG-EXPAND — bundle carries the new resources under the keys
+    # Cerebro's importer expects (resource_to_key map in migrate_export.py).
+    assert bundle["notification_prefs"][0]["principal"] == "user:alice"
+    assert bundle["device_tokens"][0]["token_type"] == "ntfy"
+    assert bundle["api_keys"][0]["key_prefix"].startswith("sk-")
+    assert bundle["webhooks"][0]["url"].startswith("https://")
 
 
 @respx.mock
@@ -187,6 +277,7 @@ def test_export_with_empty_synapse_produces_minimal_valid_bundle(
     respx.get(f"{synapse_base_url}/v1/admin/audit-log").mock(
         return_value=httpx.Response(200, json={"data": [], "next_before_id": None})
     )
+    _mock_empty_admin_endpoints(synapse_base_url)
 
     output = tmp_path / "dump"
     migrate_export.export(synapse_base_url, admin_token, output)
@@ -194,3 +285,7 @@ def test_export_with_empty_synapse_produces_minimal_valid_bundle(
     bundle = json.loads((output / "bundle.json").read_text())
     jsonschema.validate(bundle, bundle_schema)
     assert bundle["councils"] == []
+    # All four S-MIG-EXPAND resources land in the bundle as empty arrays
+    # — Cerebro's importer treats empty lists as no-ops.
+    for key in ("notification_prefs", "device_tokens", "api_keys", "webhooks"):
+        assert bundle[key] == []
