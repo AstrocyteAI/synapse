@@ -157,6 +157,50 @@ class AstrocyteGatewayClient:
             sources=data.get("sources", []),
         )
 
+    async def forget_principal(
+        self,
+        principal: str,
+        context: AstrocyteContext,
+        *,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
+        """DSAR right-to-erasure: erase all memory rows tagged
+        ``principal:{principal}`` across the tenant's banks.
+
+        POSTs to Astrocyte's ``/v1/dsar/forget_principal`` (shipped in
+        Astrocyte ≥ v0.10). Returns the gateway's report:
+
+            {"banks_processed": int, "memories_deleted": int,
+             "details": [{"bank": "...", "deleted": int}, ...]}
+
+        Raises:
+          * ``NotImplementedError`` — gateway returned 404 or 501,
+            meaning the published Astrocyte image lags this Synapse
+            version. Operators should pin to a known-good tag (see
+            ``cerebro/docs/_design/deployment-modes.md`` §4.1) or build
+            from local source. Synapse-side erasure has already
+            completed; the certificate records this as
+            ``astrocyte_pending``.
+          * ``httpx.HTTPStatusError`` — any other non-2xx status. The
+            worker catches this and records the action as ``failed``.
+        """
+        payload: dict[str, Any] = {"principal": principal}
+        if tenant_id is not None:
+            payload["tenant_id"] = tenant_id
+
+        resp = await self._http.post(
+            f"{self._base_url}/v1/dsar/forget_principal",
+            json=payload,
+            headers=self._headers(context),
+        )
+        if resp.status_code in (404, 501):
+            raise NotImplementedError(
+                f"Astrocyte gateway does not expose /v1/dsar/forget_principal "
+                f"(status {resp.status_code}). Upgrade to Astrocyte >= v0.10."
+            )
+        resp.raise_for_status()
+        return resp.json()
+
     async def forget(
         self,
         bank_id: str,

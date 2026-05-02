@@ -76,6 +76,14 @@ class Settings(BaseSettings):
     synapse_license_key_offline: str | None = None
     synapse_license_server_url: str = "https://cerebro.odeoncg.ai"
 
+    # --- S-DSAR ---
+    # HMAC-SHA256 secret used to sign fulfilment certificates. The basic
+    # tier supports HMAC only; Cerebro Enterprise adds detached RS256 JWS
+    # for externally-verifiable attestation. Operators MUST set a real
+    # value in production — the default empty string disables the DSAR
+    # endpoints (router returns 503).
+    synapse_dsar_signing_secret: str = ""
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

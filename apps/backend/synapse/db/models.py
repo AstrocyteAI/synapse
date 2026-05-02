@@ -357,3 +357,70 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
+
+
+# ---------------------------------------------------------------------------
+# S-DSAR — Data Subject Access Request lifecycle (single-tenant)
+# ---------------------------------------------------------------------------
+
+
+class DSARStatus(StrEnum):
+    pending = "pending"
+    approved = "approved"
+    rejected = "rejected"
+    completed = "completed"
+
+
+class DSARType(StrEnum):
+    erasure = "erasure"
+    access = "access"
+    rectification = "rectification"
+
+
+class DSARRequest(Base):
+    """A data-subject's request to access, correct, or erase their data.
+
+    Single-tenant Synapse implements the *basic* DSAR tier:
+      * one queue per deployment (no cross-tenant view)
+      * HMAC-SHA256 fulfilment certificates signed with
+        ``synapse_dsar_signing_secret``
+      * Synapse-side erasure (audit events, council members, notification
+        prefs, device tokens, API keys) plus a single call to
+        Astrocyte's ``/v1/dsar/forget_principal``
+
+    Customers needing JWS-detached certificates (RS256, externally
+    verifiable against a JWKS), cross-tenant DSAR queues, or
+    multi-system erasure attestation should upgrade to **Cerebro
+    Enterprise** — see ``cerebro/docs/_design/control-plane.md`` and
+    ``synapse/docs/_design/migration.md``.
+
+    Lifecycle (state machine enforced by ``synapse.dsar.state_machine``):
+
+        pending ─┬─ approve → approved ─ complete → completed (terminal)
+                 └─ reject  → rejected (terminal)
+    """
+
+    __tablename__ = "dsar_requests"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    subject_principal: Mapped[str] = mapped_column(String(256), nullable=False)
+    request_type: Mapped[DSARType] = mapped_column(String(32), nullable=False)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[DSARStatus] = mapped_column(
+        String(32), nullable=False, default=DSARStatus.pending
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    requested_by: Mapped[str] = mapped_column(String(256), nullable=False)
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    reviewed_by: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # HMAC-SHA256 fulfilment certificate. NULL until the erasure pipeline
+    # finalises (or a non-erasure request is marked completed). See
+    # synapse.dsar.certificate.build_and_sign for the wire shape.
+    certificate: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

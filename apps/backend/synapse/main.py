@@ -24,6 +24,7 @@ from synapse.routers import (
     centrifugo_router,
     contributions,
     councils,
+    dsar,
     info,
     mcp_compat,
     memory,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(mcp_compat.router, prefix="/v1")
     app.include_router(webhooks.router, prefix="/v1")
     app.include_router(notifications.router, prefix="/v1")
+    app.include_router(dsar.router, prefix="/v1")
 
     # MCP server — agent-to-agent access via Streamable HTTP transport
     # Tools: start_council, join, contribute, recall_precedent, close
