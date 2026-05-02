@@ -33,6 +33,7 @@ TEST_SETTINGS = Settings(
     stage2_timeout_seconds=10,
     stage3_timeout_seconds=10,
     max_precedents=3,
+    synapse_dsar_signing_secret="test-dsar-signing-secret",
 )
 
 
