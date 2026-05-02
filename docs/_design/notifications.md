@@ -1,6 +1,6 @@
 # Notifications
 
-This document defines email notifications, per-user preferences, and the weekly digest in Synapse.
+This document defines email notifications, mobile/desktop push, per-user preferences, and the weekly digest in Synapse.
 
 ---
 
@@ -172,7 +172,61 @@ email:
 
 ---
 
-## 6. Digest scheduling
+## 6. Push notifications (ntfy)
+
+In addition to email, Synapse delivers push notifications via [ntfy](https://ntfy.sh) — an HTTP-based pub/sub service that requires no APNs/FCM credentials and works on iOS, Android, and desktop.
+
+### 6.1 Why ntfy
+
+| Concern | ntfy answer |
+|---|---|
+| **Cross-platform** | One protocol works for Flutter (iOS + Android + macOS + desktop) and any HTTP client |
+| **No native push credentials** | Avoids APNs key + FCM service account management for first-party deployment |
+| **Self-hostable** | Operators can run their own `ntfy.sh` server for data-residency-sensitive deployments |
+| **End-to-end opt-in** | The user generates a per-device topic; the server only knows the topic, not the user identity |
+
+The trade-off vs native APNs/FCM: when the app is fully killed on iOS, ntfy's long-poll connection drops. Native APNs is on the F-extend Phase 2 roadmap for iOS-critical use cases.
+
+### 6.2 Topic model
+
+Each device generates a UUID-v4 topic on first launch and stores it in `shared_preferences` (Flutter) / `localStorage` (web). The topic is registered with the backend via `POST /v1/users/me/devices`:
+
+```json
+{
+  "platform": "ios" | "android" | "macos" | "web",
+  "ntfy_topic": "synapse-7c9a4f1e-..."
+}
+```
+
+The backend stores `(user_id, ntfy_topic, platform, last_seen)` in `device_tokens`. When a notification fires, the dispatcher publishes to `https://ntfy.sh/{topic}` with a JSON payload:
+
+```json
+{
+  "title": "Council concluded",
+  "message": "Verdict: Approved (consensus 0.87)",
+  "tags": ["council_concluded"],
+  "click": "synapse://councils/cncl_abc123"
+}
+```
+
+### 6.3 Client subscription (Flutter)
+
+`NotificationService` in `apps/synapse_app/lib/core/notifications/notification_service.dart`:
+
+- `initialize()` — request notification permission, generate or load the device topic, register with `flutter_local_notifications`
+- `ensureTopic()` — idempotent topic generation, persisted via `shared_preferences`
+- `startListening()` — long-poll `GET https://ntfy.sh/{topic}/json` and surface incoming events as local notifications via the OS notification API
+- `stopListening()` — closes the long-poll on app pause
+
+The Flutter app calls `initialize()` from `_SynapseAppState.initState`. The user reviews preferences and registered devices on `/settings/notifications`.
+
+### 6.4 Backend dispatch
+
+The backend `notifications/dispatcher.py` consults the per-user `notification_preferences` table for each event type. If the user has `mobile_push: true` for that event and at least one registered device, the dispatcher fans out one HTTP `POST` per device topic in parallel. Failures are logged but do not retry — ntfy is best-effort, and the email channel is the durable fallback.
+
+---
+
+## 7. Digest scheduling
 
 The weekly digest is sent via the Synapse scheduler (see `scheduling.md`). The digest is generated fresh each send using Astrocyte `reflect()` over the past week's `councils` bank entries.
 
@@ -189,7 +243,7 @@ notifications:
 
 ---
 
-## 7. Project structure additions
+## 8. Project structure additions
 
 ```
 apps/backend/synapse/
