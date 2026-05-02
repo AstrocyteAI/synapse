@@ -58,6 +58,11 @@ def _admin_headers() -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _admin_export_headers() -> dict:
+    """Admin headers + the X-Migration-Export opt-in for /v1/admin/webhooks."""
+    return {**_admin_headers(), "X-Migration-Export": "true"}
+
+
 def _member_headers() -> dict:
     token = make_jwt(sub="user-1", roles=["member"])
     return {"Authorization": f"Bearer {token}"}
@@ -203,7 +208,7 @@ class TestAdminListWebhooks:
             return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [wh])))
         )
 
-        resp = client.get("/v1/admin/webhooks", headers=_admin_headers())
+        resp = client.get("/v1/admin/webhooks", headers=_admin_export_headers())
         assert resp.status_code == 200
         body = resp.json()
         assert body["count"] == 1
@@ -218,7 +223,7 @@ class TestAdminListWebhooks:
             return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [])))
         )
 
-        resp = client.get("/v1/admin/webhooks", headers=_admin_headers())
+        resp = client.get("/v1/admin/webhooks", headers=_admin_export_headers())
         assert resp.status_code == 200
         assert resp.json()["count"] == 0
 
@@ -226,12 +231,27 @@ class TestAdminListWebhooks:
         resp = client.get("/v1/admin/webhooks", headers=_member_headers())
         assert resp.status_code == 403
 
+    def test_returns_403_when_migration_export_header_missing(self, client):
+        # Even with the admin role the dump is gated on an explicit opt-in
+        # header so a CSRF / clickjack from a logged-in admin browser
+        # session can't trigger a full secret leak.
+        resp = client.get("/v1/admin/webhooks", headers=_admin_headers())
+        assert resp.status_code == 403
+        assert "X-Migration-Export" in resp.json()["detail"]
+
+    def test_returns_403_when_migration_export_header_wrong_value(self, client):
+        headers = {**_admin_headers(), "X-Migration-Export": "yes"}
+        resp = client.get("/v1/admin/webhooks", headers=headers)
+        assert resp.status_code == 403
+
     def test_pagination_params_accepted(self, client, db_session):
         db_session.execute = AsyncMock(
             return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [])))
         )
 
-        resp = client.get("/v1/admin/webhooks?limit=50&offset=100", headers=_admin_headers())
+        resp = client.get(
+            "/v1/admin/webhooks?limit=50&offset=100", headers=_admin_export_headers()
+        )
         assert resp.status_code == 200
 
 
