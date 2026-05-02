@@ -249,9 +249,7 @@ class TestAdminListWebhooks:
             return_value=MagicMock(scalars=MagicMock(return_value=MagicMock(all=lambda: [])))
         )
 
-        resp = client.get(
-            "/v1/admin/webhooks?limit=50&offset=100", headers=_admin_export_headers()
-        )
+        resp = client.get("/v1/admin/webhooks?limit=50&offset=100", headers=_admin_export_headers())
         assert resp.status_code == 200
 
 
