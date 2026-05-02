@@ -50,6 +50,36 @@
       "type": "array",
       "items": { "type": "object" },
       "description": "Synapse audit-log rows. Currently accepted by Cerebro but not yet persisted (see Synapse.Migration moduledoc) — counted under `skipped`. The schema is intentionally permissive until the import path lands."
+    },
+
+    "notification_prefs": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseNotificationPrefs" },
+      "description": "Per-principal notification preferences exported via GET /v1/admin/notifications/preferences."
+    },
+
+    "device_tokens": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseDeviceToken" },
+      "description": "Per-principal device tokens exported via GET /v1/admin/notifications/devices."
+    },
+
+    "api_keys": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseApiKey" },
+      "description": "API key metadata exported via GET /v1/admin/api-keys. Raw key material is NOT included — Cerebro records these as a re-issuance manifest."
+    },
+
+    "webhooks": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseWebhook" },
+      "description": "Webhook registrations exported via GET /v1/admin/webhooks. Signing secrets are included for migration continuity."
+    },
+
+    "threads": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseThread" },
+      "description": "Council thread history (S-MIG-THREADS) exported via GET /v1/admin/threads. Each thread carries its full append-only event log under `events`. Currently accepted by Cerebro but not yet persisted — counted under `skipped` like audit_events. Decision pending: add a Thread/ThreadEvent schema to Cerebro vs collapse events into Council.chat_messages."
     }
   },
 
@@ -93,6 +123,105 @@
           "type": ["string", "null"],
           "description": "The Synapse-side tenant_id. Cerebro IGNORES this on import — councils land under the caller's JWT-claimed tenant. Recorded in settings.synapse_source_tenant for forensic recovery."
         }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseNotificationPrefs": {
+      "type": "object",
+      "description": "One row from GET /v1/admin/notifications/preferences. The `id` UUID is preserved in Cerebro for idempotent re-imports.",
+      "required": ["id", "principal"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "principal": { "type": "string" },
+        "email_enabled": { "type": "boolean" },
+        "email_address": { "type": ["string", "null"] },
+        "ntfy_enabled": { "type": "boolean" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseDeviceToken": {
+      "type": "object",
+      "description": "One row from GET /v1/admin/notifications/devices. The `id` UUID is preserved in Cerebro for idempotent re-imports.",
+      "required": ["id", "principal", "token_type", "token"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "principal": { "type": "string" },
+        "token_type": { "type": "string" },
+        "token": { "type": "string" },
+        "device_label": { "type": ["string", "null"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_used_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseApiKey": {
+      "type": "object",
+      "description": "API key metadata from GET /v1/admin/api-keys. Raw key material is never stored; Cerebro records this for operator re-issuance tracking.",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "key_prefix": { "type": "string" },
+        "roles": { "type": "array", "items": { "type": "string" } },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_used_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseWebhook": {
+      "type": "object",
+      "description": "One row from GET /v1/admin/webhooks. The `id` UUID is preserved in Cerebro for idempotent re-imports. The `secret` field is the plain HMAC signing key.",
+      "required": ["id", "url"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "url": { "type": "string", "format": "uri" },
+        "events": { "type": "array", "items": { "type": "string" } },
+        "secret": { "type": "string", "description": "Plain HMAC signing secret for migration continuity." },
+        "active": { "type": "boolean" },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "last_delivery_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseThread": {
+      "type": "object",
+      "description": "One thread + its full event timeline from GET /v1/admin/threads. council_id is null for standalone chat threads (rare in practice — most threads are council-backed). Cerebro currently records but does not persist these; see the `threads` resource description.",
+      "required": ["id", "events"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "council_id": { "type": ["string", "null"], "format": "uuid" },
+        "tenant_id": { "type": ["string", "null"] },
+        "created_by": { "type": "string" },
+        "title": { "type": ["string", "null"] },
+        "created_at": { "type": "string", "format": "date-time" },
+        "events": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SynapseThreadEvent" }
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "SynapseThreadEvent": {
+      "type": "object",
+      "description": "One event from a thread's append-only timeline. Synapse uses this for chat messages, stage progress, member responses, ranking summaries, verdicts, reflections, precedent hits, and system events — see ThreadEventType.",
+      "required": ["id", "event_type", "actor_id"],
+      "properties": {
+        "id": { "type": "integer" },
+        "event_type": { "type": "string" },
+        "actor_id": { "type": "string", "description": "user:{sub} | agent:{model_id} | system" },
+        "actor_name": { "type": "string" },
+        "content": { "type": ["string", "null"] },
+        "metadata": { "type": "object" },
+        "created_at": { "type": "string", "format": "date-time" }
       },
       "additionalProperties": true
     }

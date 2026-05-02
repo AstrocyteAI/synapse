@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import logging
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.council.thread import append_event, get_history, get_thread, thread_event_dict
-from synapse.db.models import ThreadEventType
+from synapse.db.models import Thread, ThreadEvent, ThreadEventType
 from synapse.db.session import get_session as get_db_session
 
 _logger = logging.getLogger(__name__)
@@ -138,3 +141,80 @@ async def _publish(request: Request, thread_id: uuid.UUID, payload: dict) -> Non
         await request.app.state.centrifugo.publish(f"thread:{thread_id}", payload)
     except Exception:
         _logger.warning("Centrifugo publish failed for thread %s", thread_id, exc_info=True)
+
+
+# ---------------------------------------------------------------------------
+# S-MIG-THREADS — admin export endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/admin/threads",
+    summary="[Migration export] List all threads with their event timelines (admin only)",
+)
+async def admin_list_threads(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Dump every thread with its full append-only event log.
+
+    Pagination is over threads, not events. Each thread carries
+    ``events: [...]`` with every event in id-ascending order. Operators
+    importing into a different backend should preserve event ordering
+    (the BIGSERIAL `id` is the canonical sort key).
+
+    Limit caps at 200 threads per page because each thread can carry
+    hundreds of events; a thread-of-the-day with 500 events × 200
+    threads is already a 100K-row payload.
+    """
+    if "admin" not in user.roles:
+        raise HTTPException(status_code=403, detail="admin role required")
+
+    async with request.app.state.sessionmaker() as db:
+        stmt = (
+            select(Thread)
+            .options(selectinload(Thread.events))
+            .order_by(Thread.created_at)
+            .limit(limit)
+            .offset(offset)
+        )
+        result = await db.execute(stmt)
+        threads = list(result.scalars().all())
+
+    return {
+        "count": len(threads),
+        "data": [_thread_export_dict(t) for t in threads],
+    }
+
+
+def _thread_export_dict(thread: Thread) -> dict[str, Any]:
+    return {
+        "id": str(thread.id),
+        "council_id": str(thread.council_id) if thread.council_id else None,
+        "tenant_id": thread.tenant_id,
+        "created_by": thread.created_by,
+        "title": thread.title,
+        "created_at": thread.created_at.isoformat(),
+        "events": [_thread_event_export_dict(e) for e in thread.events],
+    }
+
+
+def _thread_event_export_dict(event: ThreadEvent) -> dict[str, Any]:
+    """Thread-event shape for the migration bundle.
+
+    Mirrors ``thread_event_dict`` from the realtime path but keeps the
+    BIGSERIAL ``id`` (so importers can preserve ordering) and renames
+    ``event_metadata`` → ``metadata`` to match the schema's
+    SynapseThreadEvent shape.
+    """
+    return {
+        "id": event.id,
+        "event_type": event.event_type,
+        "actor_id": event.actor_id,
+        "actor_name": event.actor_name,
+        "content": event.content,
+        "metadata": event.event_metadata or {},
+        "created_at": event.created_at.isoformat(),
+    }

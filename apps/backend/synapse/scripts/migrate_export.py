@@ -95,12 +95,12 @@ def _export_audit_log(client: httpx.Client) -> list[dict]:
 RESOURCES: list[tuple[str, str, callable]] = [
     ("councils.jsonl", "/v1/councils", _paginate),
     ("audit_events.jsonl", "/v1/admin/audit-log", lambda c, _p: _export_audit_log(c)),
-    # NOTE: thread events are nested under each council; per-council export is
-    #       deferred to a future iteration of this script.
     ("notification_prefs.jsonl", "/v1/admin/notifications/preferences", _paginate),
     ("devices.jsonl", "/v1/admin/notifications/devices", _paginate),
     ("api_keys.jsonl", "/v1/admin/api-keys", _paginate),
     ("webhooks.jsonl", "/v1/admin/webhooks", _paginate),
+    # S-MIG-THREADS — each thread carries its events under .events
+    ("threads.jsonl", "/v1/admin/threads", _paginate),
 ]
 
 
@@ -155,6 +155,7 @@ def export(base_url: str, token: str, output: Path) -> dict[str, int]:
         "devices.jsonl": "device_tokens",
         "api_keys.jsonl": "api_keys",
         "webhooks.jsonl": "webhooks",
+        "threads.jsonl": "threads",
     }
     bundle: dict = {"manifest": manifest}
     for filename, rows in rows_by_resource.items():

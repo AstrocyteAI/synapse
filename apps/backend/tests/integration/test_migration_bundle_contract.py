@@ -137,6 +137,37 @@ def _webhook() -> dict:
     }
 
 
+def _thread(council_id: str = "11111111-1111-1111-1111-111111111111") -> dict:
+    return {
+        "id": "eeeeeeee-5555-5555-5555-eeeeeeeeeeee",
+        "council_id": council_id,
+        "tenant_id": "synapse-source-tenant",
+        "created_by": "user:alice",
+        "title": None,
+        "created_at": "2026-04-01T10:00:00Z",
+        "events": [
+            {
+                "id": 1,
+                "event_type": "user_message",
+                "actor_id": "user:alice",
+                "actor_name": "Alice",
+                "content": "Should we proceed with option B?",
+                "metadata": {},
+                "created_at": "2026-04-01T10:00:00Z",
+            },
+            {
+                "id": 2,
+                "event_type": "verdict",
+                "actor_id": "agent:openai/gpt-4o",
+                "actor_name": "GPT-4o",
+                "content": "Yes — proceed.",
+                "metadata": {"consensus_score": 0.92},
+                "created_at": "2026-04-01T10:01:00Z",
+            },
+        ],
+    }
+
+
 def _mock_empty_admin_endpoints(base_url: str) -> None:
     """The four admin export endpoints added by S-MIG-EXPAND. The
     export tool calls all of them on every run; tests that don't care
@@ -147,6 +178,7 @@ def _mock_empty_admin_endpoints(base_url: str) -> None:
         "/v1/admin/notifications/devices",
         "/v1/admin/api-keys",
         "/v1/admin/webhooks",
+        "/v1/admin/threads",
     ):
         respx.get(f"{base_url}{path}").mock(
             return_value=httpx.Response(200, json={"data": [], "count": 0})
@@ -204,6 +236,9 @@ def test_export_produces_schema_valid_bundle(
     respx.get(f"{synapse_base_url}/v1/admin/webhooks").mock(
         return_value=httpx.Response(200, json={"data": [_webhook()], "count": 1})
     )
+    respx.get(f"{synapse_base_url}/v1/admin/threads").mock(
+        return_value=httpx.Response(200, json={"data": [_thread()], "count": 1})
+    )
 
     output = tmp_path / "dump"
     counts = migrate_export.export(synapse_base_url, admin_token, output)
@@ -215,6 +250,7 @@ def test_export_produces_schema_valid_bundle(
     assert counts["devices.jsonl"] == 1
     assert counts["api_keys.jsonl"] == 1
     assert counts["webhooks.jsonl"] == 1
+    assert counts["threads.jsonl"] == 1
 
     # The bundle.json is the wire artifact Cerebro consumes — validate against schema
     bundle = json.loads((output / "bundle.json").read_text())
@@ -238,6 +274,15 @@ def test_export_produces_schema_valid_bundle(
     assert bundle["device_tokens"][0]["token_type"] == "ntfy"
     assert bundle["api_keys"][0]["key_prefix"].startswith("sk-")
     assert bundle["webhooks"][0]["url"].startswith("https://")
+    # S-MIG-THREADS — thread carries its full event timeline; the
+    # importer needs both the thread row AND its events.
+    assert len(bundle["threads"]) == 1
+    assert bundle["threads"][0]["council_id"] == "11111111-1111-1111-1111-111111111111"
+    assert len(bundle["threads"][0]["events"]) == 2
+    assert {e["event_type"] for e in bundle["threads"][0]["events"]} == {
+        "user_message",
+        "verdict",
+    }
 
 
 @respx.mock
@@ -285,7 +330,7 @@ def test_export_with_empty_synapse_produces_minimal_valid_bundle(
     bundle = json.loads((output / "bundle.json").read_text())
     jsonschema.validate(bundle, bundle_schema)
     assert bundle["councils"] == []
-    # All four S-MIG-EXPAND resources land in the bundle as empty arrays
+    # All five export-only resources land in the bundle as empty arrays
     # — Cerebro's importer treats empty lists as no-ops.
-    for key in ("notification_prefs", "device_tokens", "api_keys", "webhooks"):
+    for key in ("notification_prefs", "device_tokens", "api_keys", "webhooks", "threads"):
         assert bundle[key] == []
