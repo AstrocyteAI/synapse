@@ -47,8 +47,26 @@ Single-tenancy ≠ no enterprise features. Synapse EE includes:
 | Outbound webhooks with HMAC signing | `synapse/webhooks/` |
 | OIDC/SAML-compatible JWT auth | `synapse/auth/jwt.py` |
 | Feature licensing via `FeatureFlags` | `synapse/ee_hooks.py` (OSS) and `ee/license/` (proprietary) |
+| **Basic DSAR pipeline** — HMAC-SHA256 certificates, single-system erasure (Synapse Postgres + one Astrocyte) | `synapse/dsar/` + `synapse/routers/dsar.py` |
+| **Defense-in-depth tenant isolation** — `tenant_id` filtering at the router + repo layer (S-MT1) | All `synapse/routers/*.py` |
 
 What Synapse does **not** implement and will not implement: multi-tenancy, quota enforcement, Stripe billing. Those belong in Cerebro.
+
+## 5. Basic DSAR vs full DSAR (Cerebro Enterprise)
+
+Synapse's DSAR implementation is intentionally a basic tier. It covers the operational essentials (state machine, signed certificates, full Synapse + Astrocyte erasure) without the multi-tenant queue, externally-verifiable JWS signing, or operator UI that Cerebro Enterprise adds.
+
+| Capability | Synapse (basic) | Cerebro Enterprise (full) |
+|---|---|---|
+| Lifecycle | pending → approved → completed (or rejected) | Same |
+| Queue scope | One queue per deployment | Cross-tenant queue, super-admin triage |
+| Reviewer | `admin` role on deployment | `super_admin` on Control Plane |
+| Certificate signing | HMAC-SHA256 only — verifier needs the deployment's signing secret | HMAC-SHA256 **or** detached RS256 JWS — RS256 verifies against published JWKS |
+| Synapse-side erasure | audit events, council members, notification prefs, device tokens, API keys (revoke) | Same shape on Cerebro tables |
+| Astrocyte erasure | Single `POST /v1/dsar/forget_principal` | Same call |
+| Operator UI | None (REST endpoints only) | Cerebro Control Plane: review modal, certificate viewer |
+
+If you need RS256 JWS, cross-tenant queue, or the Control Plane UI, that's a Cerebro Enterprise upgrade. The migration path is documented in `cerebro/docs/_design/migration.md`. Pre-cutover Synapse-issued certificates remain verifiable against the original deployment's secret — archive both the certificate JSON and the secret before decommissioning.
 
 ---
 

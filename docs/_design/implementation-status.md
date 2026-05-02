@@ -24,6 +24,8 @@ Last reviewed: 2026-05-02.
 | **B10** | Notification dispatcher (email + ntfy) | ✅ |
 | **B11** | Audit-log engine (cursor pagination, deprecation alias) | ✅ |
 | **B12** | Migration export CLI (`migrate_export.py`) | ✅ |
+| **S-MT1** | Defense-in-depth tenant isolation across routers + repo helpers | ✅ |
+| **S-DSAR** | Basic DSAR pipeline — HMAC-SHA256 certificates, single-system erasure (Synapse Postgres + one Astrocyte). Customers needing JWS dual-mode certificates, cross-tenant DSAR queues, or multi-system erasure attestation should upgrade to Cerebro Enterprise — see [`multi-tenancy.md` §5](multi-tenancy.md) and `cerebro/docs/_design/migration.md`. | ✅ |
 
 ### 1.2 X-slices — backend-agnostic contract
 
