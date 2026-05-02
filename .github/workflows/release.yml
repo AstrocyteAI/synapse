@@ -7,7 +7,15 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Docker images — backend, web, astrocyte-postgres (parallel matrix)
+  # Docker images — Synapse's own backend + web (parallel matrix).
+  #
+  # Note: astrocyte-postgres is NOT published from this repo — it belongs
+  # to the Astrocyte release pipeline at AstrocyteAI/astrocyte. The local
+  # docker/astrocyte-postgres/Dockerfile is kept solely for CI integration
+  # tests (backend-ci.yml + integration-ci.yml build it locally as
+  # synapse/astrocyte-postgres:ci). Production deployments pull the
+  # canonical image from ghcr.io/astrocyteai/astrocyte/astrocyte-postgres
+  # which is published by the Astrocyte repo's release workflow.
   # ---------------------------------------------------------------------------
   docker:
     name: Docker (${{ matrix.name }})
@@ -25,9 +33,6 @@ jobs:
           - name: synapse-web
             context: apps/web
             image: ghcr.io/astrocyteai/synapse/synapse-web
-          - name: astrocyte-postgres
-            context: docker/astrocyte-postgres
-            image: ghcr.io/astrocyteai/astrocyte/astrocyte-postgres
 
     steps:
       - uses: actions/checkout@v5
