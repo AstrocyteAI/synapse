@@ -6,12 +6,28 @@ on:
       - "v*"
 
 jobs:
-  publish:
-    name: Build and push backend image
+  # ---------------------------------------------------------------------------
+  # Docker images — backend, web, astrocyte-postgres (parallel matrix)
+  # ---------------------------------------------------------------------------
+  docker:
+    name: Docker (${{ matrix.name }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+
+    strategy:
+      matrix:
+        include:
+          - name: synapse-backend
+            context: apps/backend
+            image: ghcr.io/astrocyteai/synapse/synapse-backend
+          - name: synapse-web
+            context: apps/web
+            image: ghcr.io/astrocyteai/synapse/synapse-web
+          - name: astrocyte-postgres
+            context: docker/astrocyte-postgres
+            image: ghcr.io/astrocyteai/astrocyte/astrocyte-postgres
 
     steps:
       - uses: actions/checkout@v4
@@ -27,14 +43,103 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/astrocyteai/synapse/synapse-backend
+          images: ${{ matrix.image }}
           tags: |
-            type=semver,pattern={{version}}
+            type=semver,pattern=v{{version}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: apps/backend
+          context: ${{ matrix.context }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+  # ---------------------------------------------------------------------------
+  # Flutter desktop builds — macOS, Windows, Linux (parallel matrix)
+  # ---------------------------------------------------------------------------
+  flutter:
+    name: Flutter (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+            build-cmd: flutter build macos --release
+            artifact-path: apps/synapse_app/build/macos/Build/Products/Release/synapse_app.app
+            asset-name: synapse-macos
+            archive-cmd: zip -r
+
+          - os: windows-latest
+            target: windows
+            build-cmd: flutter build windows --release
+            artifact-path: apps/synapse_app/build/windows/x64/runner/Release
+            asset-name: synapse-windows
+            archive-cmd: Compress-Archive -Path
+
+          - os: ubuntu-latest
+            target: linux
+            build-cmd: flutter build linux --release
+            artifact-path: apps/synapse_app/build/linux/x64/release/bundle
+            asset-name: synapse-linux
+            archive-cmd: tar -czf
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.35.6"
+          channel: stable
+          cache: true
+
+      - name: Platform setup (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            clang cmake ninja-build pkg-config \
+            libgtk-3-dev liblzma-dev libstdc++-12-dev
+
+      - name: Install dependencies
+        working-directory: apps/synapse_app
+        run: flutter pub get
+
+      - name: Enable desktop target
+        run: flutter config --enable-${{ matrix.target }}-desktop
+
+      - name: Build
+        working-directory: apps/synapse_app
+        run: ${{ matrix.build-cmd }}
+
+      - name: Package (macOS / Linux)
+        if: matrix.os != 'windows-latest'
+        run: |
+          TAG=${{ github.ref_name }}
+          NAME="${{ matrix.asset-name }}-${TAG}"
+          if [ "${{ matrix.os }}" = "macos-latest" ]; then
+            zip -r "${NAME}.zip" "${{ matrix.artifact-path }}"
+            echo "ASSET=${NAME}.zip" >> $GITHUB_ENV
+          else
+            tar -czf "${NAME}.tar.gz" -C "$(dirname ${{ matrix.artifact-path }})" "$(basename ${{ matrix.artifact-path }})"
+            echo "ASSET=${NAME}.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $name = "${{ matrix.asset-name }}-${tag}"
+          Compress-Archive -Path "${{ matrix.artifact-path }}\*" -DestinationPath "${name}.zip"
+          echo "ASSET=${name}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET }}
