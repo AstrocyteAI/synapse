@@ -221,3 +221,141 @@ class ChatResponse {
     );
   }
 }
+
+// ─── Notifications (B10 / W9 / F3) ────────────────────────────────────────
+
+class NotificationPreferences {
+  final bool emailEnabled;
+  final String? emailAddress;
+  final bool ntfyEnabled;
+  final String updatedAt;
+
+  const NotificationPreferences({
+    required this.emailEnabled,
+    this.emailAddress,
+    required this.ntfyEnabled,
+    required this.updatedAt,
+  });
+
+  factory NotificationPreferences.fromJson(Map<String, dynamic> json) {
+    return NotificationPreferences(
+      emailEnabled: (json['email_enabled'] as bool?) ?? false,
+      emailAddress: json['email_address'] as String?,
+      ntfyEnabled: (json['ntfy_enabled'] as bool?) ?? false,
+      updatedAt: (json['updated_at'] as String?) ?? '',
+    );
+  }
+}
+
+class DeviceToken {
+  final String id;
+  final String tokenType;
+  final String token;
+  final String? deviceLabel;
+  final String createdAt;
+
+  const DeviceToken({
+    required this.id,
+    required this.tokenType,
+    required this.token,
+    this.deviceLabel,
+    required this.createdAt,
+  });
+
+  factory DeviceToken.fromJson(Map<String, dynamic> json) {
+    return DeviceToken(
+      id: json['id'] as String,
+      tokenType: json['token_type'] as String,
+      token: json['token'] as String,
+      deviceLabel: json['device_label'] as String?,
+      createdAt: (json['created_at'] as String?) ?? '',
+    );
+  }
+}
+
+class FeedItem {
+  /// One of: verdict_ready, pending_approval, in_progress, summon_requested
+  final String type;
+  final String councilId;
+  final String question;
+  final String? verdict;
+  final String? confidenceLabel;
+  final double? consensusScore;
+  final String occurredAt;
+
+  const FeedItem({
+    required this.type,
+    required this.councilId,
+    required this.question,
+    this.verdict,
+    this.confidenceLabel,
+    this.consensusScore,
+    required this.occurredAt,
+  });
+
+  factory FeedItem.fromJson(Map<String, dynamic> json) {
+    return FeedItem(
+      type: json['type'] as String,
+      councilId: json['council_id'] as String,
+      question: json['question'] as String,
+      verdict: json['verdict'] as String?,
+      confidenceLabel: json['confidence_label'] as String?,
+      consensusScore: (json['consensus_score'] as num?)?.toDouble(),
+      occurredAt: (json['occurred_at'] as String?) ?? '',
+    );
+  }
+}
+
+// ─── Backend metadata (X-2) ──────────────────────────────────────────────
+
+class BackendInfo {
+  /// "synapse" or "cerebro"
+  final String backend;
+  final String version;
+  final bool multiTenant;
+  final bool billing;
+
+  const BackendInfo({
+    required this.backend,
+    required this.version,
+    required this.multiTenant,
+    required this.billing,
+  });
+
+  factory BackendInfo.fromJson(Map<String, dynamic> json) {
+    return BackendInfo(
+      backend: json['backend'] as String,
+      version: (json['version'] as String?) ?? '',
+      multiTenant: (json['multi_tenant'] as bool?) ?? false,
+      billing: (json['billing'] as bool?) ?? false,
+    );
+  }
+}
+
+// ─── Memory hits (W4 / F-extend) ─────────────────────────────────────────
+
+class MemoryHit {
+  final String memoryId;
+  final String content;
+  final double score;
+  final String bankId;
+  final List<String> tags;
+
+  const MemoryHit({
+    required this.memoryId,
+    required this.content,
+    required this.score,
+    required this.bankId,
+    required this.tags,
+  });
+
+  factory MemoryHit.fromJson(Map<String, dynamic> json) {
+    return MemoryHit(
+      memoryId: (json['memory_id'] as String?) ?? '',
+      content: (json['content'] as String?) ?? '',
+      score: ((json['score'] as num?) ?? 0).toDouble(),
+      bankId: (json['bank_id'] as String?) ?? '',
+      tags: ((json['tags'] as List?) ?? []).map((e) => e.toString()).toList(),
+    );
+  }
+}

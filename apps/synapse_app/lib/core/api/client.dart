@@ -196,4 +196,138 @@ class SynapseApiClient {
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
+
+  // ─── Backend metadata (X-2) — public, no auth ─────────────────────────────
+
+  Future<BackendInfo> getBackendInfo() async {
+    final uri = Uri.parse('$baseUrl/v1/info');
+    final response = await _httpClient.get(uri);
+    _checkResponse(response);
+    return BackendInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  // ─── Notifications (B10 / W9 / F3) ────────────────────────────────────────
+
+  Future<NotificationPreferences> getNotificationPreferences() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/notifications/preferences');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return NotificationPreferences.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<NotificationPreferences> updateNotificationPreferences({
+    required bool emailEnabled,
+    String? emailAddress,
+    required bool ntfyEnabled,
+  }) async {
+    final headers = await _authHeaders();
+    final body = {
+      'email_enabled': emailEnabled,
+      'email_address': emailAddress,
+      'ntfy_enabled': ntfyEnabled,
+    };
+    final uri = Uri.parse('$baseUrl/v1/notifications/preferences');
+    final response = await _httpClient.put(
+      uri,
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    _checkResponse(response);
+    return NotificationPreferences.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<List<DeviceToken>> listDeviceTokens() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/notifications/devices');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = (body['devices'] as List<dynamic>?) ?? [];
+    return list.map((e) => DeviceToken.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<DeviceToken> registerDeviceToken({
+    required String token,
+    String? deviceLabel,
+  }) async {
+    final headers = await _authHeaders();
+    final body = <String, dynamic>{'token': token, 'token_type': 'ntfy'};
+    if (deviceLabel != null) body['device_label'] = deviceLabel;
+    final uri = Uri.parse('$baseUrl/v1/notifications/devices');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    _checkResponse(response);
+    return DeviceToken.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteDeviceToken(String tokenId) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/notifications/devices/$tokenId');
+    final response = await _httpClient.delete(uri, headers: headers);
+    _checkResponse(response);
+  }
+
+  Future<List<FeedItem>> getNotificationFeed({int limit = 20}) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/notifications/feed?limit=$limit');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = (body['items'] as List<dynamic>?) ?? [];
+    return list.map((e) => FeedItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // ─── Memory (F-extend, B12) ───────────────────────────────────────────────
+
+  Future<List<MemoryHit>> searchMemory(
+    String query, {
+    String bank = 'decisions',
+    int limit = 10,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse(
+      '$baseUrl/v1/memory/search?q=${Uri.encodeQueryComponent(query)}'
+      '&bank=$bank&limit=$limit',
+    );
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = (body['hits'] as List<dynamic>?) ?? [];
+    return list.map((e) => MemoryHit.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // ─── Analytics (B8 / F-extend) ────────────────────────────────────────────
+
+  Future<Map<String, dynamic>> getAnalyticsConsensus() async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/analytics/consensus');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getAnalyticsVelocity({int days = 30}) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/analytics/velocity?days=$days');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<List<dynamic>> getAnalyticsMembers({int limit = 20}) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/analytics/members?limit=$limit');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    return (body['data'] as List<dynamic>?) ?? [];
+  }
 }

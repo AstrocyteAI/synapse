@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'core/api/client.dart';
 import 'core/auth/token_store.dart';
+import 'core/notifications/notification_service.dart';
 import 'core/realtime/centrifugo.dart';
+import 'features/analytics/analytics_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/councils/council_list_screen.dart';
 import 'features/councils/council_detail_screen.dart';
 import 'features/councils/create_council_screen.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/chat/verdict_chat_screen.dart';
+import 'features/memory/memory_screen.dart';
+import 'features/notifications/notifications_screen.dart';
+import 'features/settings/notifications_settings_screen.dart';
 
 class SynapseApp extends StatefulWidget {
   final String baseUrl;
@@ -28,6 +33,7 @@ class _SynapseAppState extends State<SynapseApp> {
   late final TokenStore _tokenStore;
   late final SynapseApiClient _client;
   late final CentrifugoClient _centrifugoClient;
+  late final NotificationService _notifications;
   late final GoRouter _router;
 
   @override
@@ -39,6 +45,9 @@ class _SynapseAppState extends State<SynapseApp> {
       tokenStore: _tokenStore,
     );
     _centrifugoClient = CentrifugoClient();
+    _notifications = NotificationService();
+    // Permission prompt + ntfy topic seed; idempotent.
+    _notifications.initialize();
 
     _router = GoRouter(
       initialLocation: '/councils',
@@ -103,6 +112,29 @@ class _SynapseAppState extends State<SynapseApp> {
             sessionId: state.pathParameters['id']!,
             client: _client,
           ),
+        ),
+        // F-extend / W9 — notification feed
+        GoRoute(
+          path: '/notifications',
+          builder: (context, state) => NotificationsScreen(apiClient: _client),
+        ),
+        // F-extend / W9 — preferences + ntfy device registration
+        GoRoute(
+          path: '/settings/notifications',
+          builder: (context, state) => NotificationsSettingsScreen(
+            apiClient: _client,
+            notificationService: _notifications,
+          ),
+        ),
+        // F-extend / W4 — Astrocyte memory search
+        GoRoute(
+          path: '/memory',
+          builder: (context, state) => MemoryScreen(apiClient: _client),
+        ),
+        // F-extend / W7 — analytics overview
+        GoRoute(
+          path: '/analytics',
+          builder: (context, state) => AnalyticsScreen(apiClient: _client),
         ),
       ],
     );
