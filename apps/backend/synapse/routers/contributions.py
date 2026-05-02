@@ -59,6 +59,18 @@ async def contribute(
     if not council:
         raise HTTPException(status_code=404, detail="Council session not found")
 
+    # MT-1: defense-in-depth tenant scoping. Without this, a caller from
+    # tenant A who knows a session_id in tenant B can post contributions
+    # to that session. We fail with 404 (not 403) to avoid distinguishing
+    # "exists in another tenant" from "doesn't exist". Admins bypass.
+    if (
+        user.tenant_id
+        and council.tenant_id
+        and council.tenant_id != user.tenant_id
+        and "admin" not in (user.roles or [])
+    ):
+        raise HTTPException(status_code=404, detail="Council session not found")
+
     if council.status != CouncilStatus.waiting_contributions:
         raise HTTPException(
             status_code=409,

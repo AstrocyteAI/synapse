@@ -118,7 +118,12 @@ async def list_webhooks(
     db: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """List webhooks registered by the current user."""
-    stmt = select(Webhook).where(Webhook.created_by == user.principal)
+    # MT-1: tenant_id filter alongside created_by. See api_keys.list for
+    # the rationale; `is_not_distinct_from` is NULL-safe.
+    stmt = select(Webhook).where(
+        Webhook.created_by == user.principal,
+        Webhook.tenant_id.is_not_distinct_from(user.tenant_id),
+    )
     result = await db.execute(stmt)
     webhooks = result.scalars().all()
     return [

@@ -89,8 +89,31 @@ def quorum_met(session: CouncilSession) -> bool:
 async def get_session(
     db: AsyncSession,
     session_id: uuid.UUID,
+    *,
+    tenant_id: str | None | type(...) = ...,
 ) -> CouncilSession | None:
-    return await db.get(CouncilSession, session_id)
+    """Fetch a council session by primary key.
+
+    When ``tenant_id`` is provided (including ``None`` for a single-tenant
+    JWT), the session is filtered through ``is_not_distinct_from`` and a
+    cross-tenant row is returned as ``None`` — same shape as a missing
+    row, so the caller's 404 path collapses both cases.
+
+    The default sentinel ``...`` keeps the un-scoped call path (used by
+    background workers, the orchestrator, audit emitters, etc.) which
+    operates with a system identity rather than a user JWT.
+    """
+    session = await db.get(CouncilSession, session_id)
+    if session is None:
+        return None
+    if tenant_id is ...:
+        return session
+    # Tenant-scoped fetch: collapse cross-tenant matches to "not found"
+    # so the caller can't distinguish "exists in another tenant" (was 403)
+    # from "doesn't exist" (404).
+    if session.tenant_id != tenant_id:
+        return None
+    return session
 
 
 async def list_sessions(

@@ -339,10 +339,14 @@ async def get_notification_feed(
 
     Not EE-gated — all plans can view the feed.
     """
-    # Verdicts + pending approval + in-progress — councils the user created
+    # MT-1: filter by tenant_id alongside created_by. Same principal in
+    # two tenants must not see cross-tenant councils on their feed.
     stmt = (
         select(CouncilSession)
-        .where(CouncilSession.created_by == user.principal)
+        .where(
+            CouncilSession.created_by == user.principal,
+            CouncilSession.tenant_id.is_not_distinct_from(user.tenant_id),
+        )
         .order_by(desc(CouncilSession.created_at))
         .limit(limit)
     )

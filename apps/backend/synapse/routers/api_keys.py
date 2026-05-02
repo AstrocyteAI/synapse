@@ -106,8 +106,13 @@ async def list_api_keys(
     db: AsyncSession = Depends(get_db_session),
 ) -> Any:
     """List active (non-revoked) API keys for the current user."""
+    # MT-1: tenant_id alongside created_by. Same principal across two
+    # tenants (rare but possible) must NOT see each other's keys.
+    # `is_not_distinct_from` makes the comparison NULL-safe — a JWT with
+    # no tenant_id only sees keys with NULL tenant_id.
     stmt = select(ApiKey).where(
         ApiKey.created_by == user.principal,
+        ApiKey.tenant_id.is_not_distinct_from(user.tenant_id),
         ApiKey.revoked_at.is_(None),
     )
     result = await db.execute(stmt)

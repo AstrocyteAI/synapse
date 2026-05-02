@@ -36,8 +36,24 @@ async def create_thread(
 async def get_thread(
     db: AsyncSession,
     thread_id: uuid.UUID,
+    *,
+    tenant_id: str | None | type(...) = ...,
 ) -> Thread | None:
-    return await db.get(Thread, thread_id)
+    """Fetch a thread by id.
+
+    When ``tenant_id`` is supplied (including ``None`` for a single-tenant
+    JWT), a cross-tenant row is returned as ``None`` so callers raise 404
+    rather than 403 — eliminating the existence-probe info leak. The
+    ``...`` sentinel is the un-scoped path for system callers.
+    """
+    thread = await db.get(Thread, thread_id)
+    if thread is None:
+        return None
+    if tenant_id is ...:
+        return thread
+    if thread.tenant_id != tenant_id:
+        return None
+    return thread
 
 
 async def get_thread_by_council(

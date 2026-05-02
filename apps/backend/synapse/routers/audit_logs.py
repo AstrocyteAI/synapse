@@ -69,11 +69,15 @@ async def list_audit_log(
     if "admin" not in user.roles:
         raise HTTPException(status_code=403, detail="admin role required")
 
-    stmt = select(AuditEvent)
-
-    # Tenant isolation — non-null tenant_id users only see their own tenant
-    if user.tenant_id:
-        stmt = stmt.where(AuditEvent.tenant_id == user.tenant_id)
+    # MT-1: fail closed on the tenant boundary. The previous behaviour
+    # only filtered when `user.tenant_id` was truthy — a token with no
+    # `synapse_tenant` claim therefore saw EVERY tenant's audit events,
+    # which is precisely the leak audit logs are meant to prevent.
+    #
+    # Single-tenant Synapse deployments where every JWT lacks tenant_id
+    # are still supported: see audit events with NULL tenant_id by
+    # matching `IS NULL` rather than fanning out across tenants.
+    stmt = select(AuditEvent).where(AuditEvent.tenant_id.is_not_distinct_from(user.tenant_id))
 
     if before_id is not None:
         stmt = stmt.where(AuditEvent.id < before_id)

@@ -283,7 +283,7 @@ async def get_council(
     db: AsyncSession = Depends(get_db_session),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -305,7 +305,7 @@ async def get_council_thread(
     db: AsyncSession = Depends(get_db_session),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -339,7 +339,7 @@ async def close_council(
     in-progress council and accepts whatever deliberation has occurred so far.
     If the council is in ``pending_approval`` this overrides the conflict block.
     """
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -371,7 +371,7 @@ async def approve_council(
 
     Returns 409 if the session is not in ``pending_approval``.
     """
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -422,7 +422,7 @@ async def chat_with_verdict(
     db: AsyncSession = Depends(get_db_session),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -499,7 +499,7 @@ async def stream_council(
     db: AsyncSession = Depends(get_db_session),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> StreamingResponse:
-    session = await get_session(db, session_id)
+    session = await _load_council(db, session_id, user)
     if not session:
         raise HTTPException(status_code=404, detail="Council session not found")
     _assert_owns(session, user)
@@ -598,10 +598,32 @@ async def _retain_reflection(
 
 
 def _assert_owns(session, user: AuthenticatedUser) -> None:
+    """Belt-and-braces tenant check kept around even though the fetch
+    helpers below now pre-filter by tenant. The combined effect is
+    defense-in-depth: a future code path that bypasses ``_load_council``
+    still cannot return cross-tenant rows."""
     if "admin" in (user.roles or []):
         return
     if user.tenant_id and session.tenant_id != user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+async def _load_council(
+    db: AsyncSession,
+    session_id,
+    user: AuthenticatedUser,
+):
+    """Tenant-scoped council fetch.
+
+    For non-admins the query filters by ``tenant_id`` directly, so a
+    cross-tenant ``session_id`` returns ``None`` and the caller raises
+    404 — eliminating the 403/404 distinction that previously let a
+    caller probe whether a session existed in another tenant. Admins
+    bypass the filter so they can investigate any tenant.
+    """
+    if "admin" in (user.roles or []):
+        return await get_session(db, session_id)
+    return await get_session(db, session_id, tenant_id=user.tenant_id)
 
 
 def _session_summary(s) -> dict:

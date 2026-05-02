@@ -40,7 +40,7 @@ async def send_message(
     db: AsyncSession = Depends(get_db_session),
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict:
-    thread = await get_thread(db, thread_id)
+    thread = await _load_thread(db, thread_id, user)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     _assert_thread_access(thread, user)
@@ -80,7 +80,7 @@ async def list_events(
     if limit < 1 or limit > 200:
         raise HTTPException(status_code=422, detail="limit must be between 1 and 200")
 
-    thread = await get_thread(db, thread_id)
+    thread = await _load_thread(db, thread_id, user)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     _assert_thread_access(thread, user)
@@ -110,10 +110,22 @@ async def list_events(
 
 
 def _assert_thread_access(thread, user: AuthenticatedUser) -> None:
+    """Belt-and-braces tenant check kept around even though
+    ``_load_thread`` now pre-filters at the repo layer. Combined effect
+    is defense-in-depth — a future code path that fetches a thread
+    without going through ``_load_thread`` still cannot leak
+    cross-tenant data."""
     if "admin" in (user.roles or []):
         return
     if user.tenant_id and thread.tenant_id != user.tenant_id:
         raise HTTPException(status_code=403, detail="Access denied")
+
+
+async def _load_thread(db: AsyncSession, thread_id, user: AuthenticatedUser):
+    """Tenant-scoped thread fetch — admins bypass the filter."""
+    if "admin" in (user.roles or []):
+        return await get_thread(db, thread_id)
+    return await get_thread(db, thread_id, tenant_id=user.tenant_id)
 
 
 def _display_name(user: AuthenticatedUser) -> str:
