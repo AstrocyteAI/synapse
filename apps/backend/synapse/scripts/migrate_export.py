@@ -114,7 +114,13 @@ def export(base_url: str, token: str, output: Path) -> dict[str, int]:
     rows; the JSONL files are kept for streaming-import (planned).
     """
     output.mkdir(parents=True, exist_ok=True)
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {
+        "Authorization": f"Bearer {token}",
+        # Required by /v1/admin/webhooks (it returns plaintext signing
+        # secrets and refuses without an explicit opt-in). Other endpoints
+        # ignore unknown headers, so it's safe to send everywhere.
+        "X-Migration-Export": "true",
+    }
     counts: dict[str, int] = {}
     rows_by_resource: dict[str, list[dict]] = {}
 

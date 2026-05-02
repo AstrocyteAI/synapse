@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 import uuid
 from datetime import UTC, datetime
@@ -17,6 +18,8 @@ from synapse.auth.jwt import AuthenticatedUser, get_current_user
 from synapse.db.models import Webhook
 from synapse.db.session import get_session as get_db_session
 from synapse.webhooks.delivery import WEBHOOK_EVENTS
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["webhooks"])
 
@@ -188,6 +191,14 @@ class WebhookExportOut(BaseModel):
     last_delivery_at: str | None
 
 
+# Header that callers must send to opt into the secret-bearing export.
+# Without it the endpoint returns 403 even for admins. Stops a CSRF / clickjack
+# / accidental-link from triggering a full secret dump from a logged-in admin
+# browser session.
+_MIGRATION_EXPORT_HEADER = "X-Migration-Export"
+_MIGRATION_EXPORT_VALUE = "true"
+
+
 @router.get(
     "/admin/webhooks",
     summary="[Migration export] List all webhooks including signing secrets (admin only)",
@@ -198,23 +209,73 @@ async def admin_list_webhooks(
     request: Request = None,
     user: AuthenticatedUser = Depends(get_current_user),
 ) -> dict[str, Any]:
-    """Dump all webhooks (including secrets) for migration to Cerebro (X-4).
+    """Dump all webhooks (including signing secrets) for migration to Cerebro.
 
-    Returns webhooks for every principal in this deployment. Requires the
-    ``admin`` role.
+    This endpoint exposes plaintext HMAC signing keys for every webhook in
+    the deployment. A single compromised admin token therefore exfiltrates
+    every consumer's signing key. Three guard rails:
+
+      * ``admin`` role required.
+      * ``X-Migration-Export: true`` header required — opts into the dump
+        explicitly so a stolen admin browser session can't trigger it via
+        CSRF or a malicious link. The Cerebro migration importer sends
+        this header; nothing else should.
+      * Every call is audit-logged at HIGH severity with the requesting
+        principal, source IP, user agent, and the count of secrets
+        returned. Operators should alarm on this event in real time.
 
     The ``secret`` field is the plain HMAC signing key. It is included here
-    (and only here) so that existing webhook consumers do not need to update
+    (and only here) so existing webhook consumers do not need to update
     their signature-verification setup after migration.
     """
     if "admin" not in user.roles:
         raise HTTPException(status_code=403, detail="admin role required")
+
+    if request.headers.get(_MIGRATION_EXPORT_HEADER) != _MIGRATION_EXPORT_VALUE:
+        # 403 (not 400) so that any audit pipeline treats this as an
+        # authorization failure on a sensitive resource, not a
+        # malformed-request blip.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                f"{_MIGRATION_EXPORT_HEADER}: {_MIGRATION_EXPORT_VALUE} header "
+                "required for this endpoint."
+            ),
+        )
 
     async with request.app.state.sessionmaker() as db:
         result = await db.execute(
             select(Webhook).order_by(Webhook.created_at).limit(limit).offset(offset)
         )
         rows = result.scalars().all()
+
+        # Loud audit trail — every secret dump is a HIGH-severity event.
+        client_ip = request.client.host if request.client else None
+        await audit_emit(
+            db,
+            "webhook.secrets_exported",
+            user.principal,
+            tenant_id=user.tenant_id,
+            resource_type="webhook",
+            resource_id=None,
+            metadata={
+                "severity": "high",
+                "count": len(rows),
+                "client_ip": client_ip,
+                "user_agent": request.headers.get("user-agent"),
+                "limit": limit,
+                "offset": offset,
+            },
+        )
+        await db.commit()
+
+    _logger.warning(
+        "webhook.secrets_exported principal=%s tenant=%s ip=%s count=%d",
+        user.principal,
+        user.tenant_id,
+        client_ip,
+        len(rows),
+    )
 
     return {
         "count": len(rows),
