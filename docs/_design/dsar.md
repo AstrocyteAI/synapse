@@ -133,6 +133,25 @@ Rotating `SYNAPSE_DSAR_SIGNING_SECRET` is a deliberate operational event: previo
 
 ---
 
+## 7. DSAR + migration to Cerebro Enterprise
+
+DSAR is **deployment-scoped**. A subject who files a DSAR on Synapse and is then migrated to Cerebro must file again under Cerebro — Synapse-side erasure does not propagate.
+
+Two specific implications:
+
+| Scenario | What happens |
+|---|---|
+| Subject files DSAR on Synapse, request marked completed, then operator migrates the workspace to Cerebro | The Synapse-side erasure is real and signed. Cerebro starts with the *post-erasure* data set (the rows are already gone in Synapse, so they don't appear in the migration bundle). The certificate stays with Synapse — archive the certificate JSON + the signing secret before decommissioning, otherwise the certificate becomes meaningless. |
+| Subject files DSAR on Synapse, then operator migrates the workspace mid-flight (request is in `pending` or `approved` state) | The DSAR row itself does NOT migrate to Cerebro — `dsar_requests` is not in the migration bundle. The subject must file again on Cerebro. Operators should drain the DSAR queue (approve/reject/complete every pending request) before initiating migration. |
+
+The reason DSARs aren't in the migration bundle: **DSAR is a one-shot operational event with cryptographic signing tied to the deployment.** Re-issuing a Cerebro certificate for a Synapse-fulfilled DSAR would require Cerebro's signing identity to attest to actions Cerebro didn't perform, which is exactly the kind of trust break the certificate is meant to prevent. Better to archive the Synapse certificate alongside the signing secret and start fresh on Cerebro.
+
+For the inverse direction — Cerebro Enterprise customers who downsize to single-tenant Synapse — same rule: the Cerebro DSAR queue stays in Cerebro; new DSARs on Synapse are signed under Synapse's HMAC secret.
+
+See `cerebro/docs/_design/migration.md §5` for the full "what cannot be migrated" table.
+
+---
+
 ## See also
 
 - [`multi-tenancy.md`](multi-tenancy.md) — basic vs full DSAR comparison
