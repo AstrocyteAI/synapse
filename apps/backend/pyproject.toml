@@ -42,6 +42,7 @@ dev = [
     "pytest-cov>=5",
     "httpx>=0.27",      # AsyncClient for FastAPI tests
     "respx>=0.21",      # httpx mock for Astrocyte gateway calls
+    "jsonschema>=4",    # validate migration bundle wire shape against the shared contract
     "ruff>=0.4",
 ]
 

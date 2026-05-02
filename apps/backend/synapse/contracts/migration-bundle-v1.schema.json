@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cerebro.odeoncg.ai/contracts/migration-bundle-v1.schema.json",
+  "title": "Synapse → Cerebro migration bundle (v1)",
+  "description": "Wire shape produced by Synapse's `migrate_export.export()` and consumed by Cerebro's `POST /v1/admin/migrate/import`. This file is the SINGLE source of truth for the migration contract — both repos validate against it.",
+
+  "type": "object",
+  "required": ["manifest"],
+  "additionalProperties": true,
+
+  "properties": {
+    "manifest": {
+      "type": "object",
+      "required": ["format_version", "source_backend", "counts"],
+      "additionalProperties": true,
+      "properties": {
+        "format_version": {
+          "type": "integer",
+          "const": 1,
+          "description": "Bundle format version. Cerebro rejects anything other than 1."
+        },
+        "source_backend": {
+          "type": "object",
+          "required": ["backend"],
+          "properties": {
+            "backend": {
+              "type": "string",
+              "const": "synapse",
+              "description": "Cerebro rejects bundles whose source_backend.backend is not 'synapse'."
+            },
+            "version": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "counts": {
+          "type": "object",
+          "description": "Per-resource row counts produced by the export. Informational; the importer trusts the array lengths.",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+
+    "councils": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/SynapseCouncil" },
+      "description": "Synapse council session rows. Cerebro stores them under the destination tenant_id (the source tenant_id field is recorded in settings)."
+    },
+
+    "audit_events": {
+      "type": "array",
+      "items": { "type": "object" },
+      "description": "Synapse audit-log rows. Currently accepted by Cerebro but not yet persisted (see Synapse.Migration moduledoc) — counted under `skipped`. The schema is intentionally permissive until the import path lands."
+    }
+  },
+
+  "$defs": {
+    "SynapseCouncil": {
+      "type": "object",
+      "description": "One row from Synapse's GET /v1/councils. The importer reads `session_id` (preferred) or `id` as the source UUID and preserves it in Cerebro.",
+      "anyOf": [
+        { "required": ["session_id"] },
+        { "required": ["id"] }
+      ],
+      "properties": {
+        "session_id": { "type": "string", "format": "uuid" },
+        "id": { "type": "string", "format": "uuid" },
+        "question": { "type": "string" },
+        "status": {
+          "type": "string",
+          "description": "Synapse lifecycle status. The importer maps this to one of Cerebro's draft|running|closed via Synapse.Migration.map_status/1."
+        },
+        "council_type": { "type": ["string", "null"] },
+        "members": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "chairman": {
+          "type": ["object", "null"],
+          "properties": {
+            "model_id": { "type": ["string", "null"] }
+          }
+        },
+        "verdict": { "type": ["string", "null"] },
+        "consensus_score": { "type": ["number", "null"] },
+        "confidence_label": { "type": ["string", "null"] },
+        "dissent_detected": { "type": ["boolean", "null"] },
+        "topic_tag": { "type": ["string", "null"] },
+        "template_id": { "type": ["string", "null"] },
+        "created_by": { "type": ["string", "null"] },
+        "created_at": { "type": ["string", "null"], "format": "date-time" },
+        "closed_at": { "type": ["string", "null"], "format": "date-time" },
+        "tenant_id": {
+          "type": ["string", "null"],
+          "description": "The Synapse-side tenant_id. Cerebro IGNORES this on import — councils land under the caller's JWT-claimed tenant. Recorded in settings.synapse_source_tenant for forensic recovery."
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
