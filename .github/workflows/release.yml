@@ -30,7 +30,7 @@ jobs:
             image: ghcr.io/astrocyteai/astrocyte/astrocyte-postgres
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -90,7 +90,7 @@ jobs:
             archive-cmd: tar -czf
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: subosito/flutter-action@v2
         with:
