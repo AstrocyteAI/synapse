@@ -240,13 +240,23 @@ export interface BackendFeatureFlags {
 	tenant_admin: boolean;
 }
 
+export interface OidcConfig {
+	issuer: string;
+	client_id: string;
+	scopes: string[];
+}
+
 export interface BackendInfo {
 	backend: 'synapse' | 'cerebro';
 	version: string;
 	contract_version: string;
+	/** "jwt_hs256" | "jwt_oidc" | "local" */
+	auth_mode: string;
 	multi_tenant: boolean;
 	billing: boolean;
 	features: BackendFeatureFlags;
+	/** Present when auth_mode == "jwt_oidc" */
+	oidc?: OidcConfig | null;
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@
 	import { authStore } from '$lib/stores/auth.svelte';
 	import BackendBadge from '$lib/components/BackendBadge.svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 
 	let { children } = $props();
@@ -37,10 +38,17 @@
 		}
 	}
 
+	const PUBLIC_ROUTES = new Set(['/login']);
+
 	onMount(() => {
 		// Fetch backend metadata once at app load (X-3) — drives BackendBadge
 		// and any multi_tenant / billing UI gating downstream.
 		backendStore.load();
+
+		// Auth guard — redirect to /login if no token and not already there.
+		if (!getToken() && !PUBLIC_ROUTES.has($page.url.pathname)) {
+			goto('/login');
+		}
 
 		refreshUnreadCount();
 		// Re-check every 60 s while the tab is open

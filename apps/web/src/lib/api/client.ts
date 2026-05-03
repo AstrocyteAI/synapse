@@ -56,6 +56,22 @@ export function clearToken(): void {
 	localStorage.removeItem(TOKEN_KEY);
 }
 
+/** POST /v1/auth/login — local email/password auth (SYNAPSE_AUTH_MODE=local). */
+export async function loginLocal(email: string, password: string): Promise<void> {
+	const res = await fetch(`${API_BASE}/v1/auth/login`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ email, password })
+	});
+	if (!res.ok) {
+		if (res.status === 401) throw new Error('Invalid email or password.');
+		const text = await res.text().catch(() => res.statusText);
+		throw new Error(`Login failed (${res.status}): ${text}`);
+	}
+	const { access_token } = (await res.json()) as { access_token: string };
+	setToken(access_token);
+}
+
 function authHeaders(): HeadersInit {
 	const token = getToken();
 	return token

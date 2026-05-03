@@ -42,6 +42,10 @@ class BackendStore {
 	get hasBilling(): boolean {
 		return this.info?.billing ?? false;
 	}
+	/** "jwt_hs256" | "jwt_oidc" | "local" — defaults to jwt_hs256 until loaded. */
+	get authMode(): string {
+		return this.info?.auth_mode ?? 'jwt_hs256';
+	}
 }
 
 export const backendStore = new BackendStore();
