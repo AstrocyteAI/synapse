@@ -103,11 +103,15 @@ jobs:
 
       - name: Platform setup (Linux)
         if: matrix.os == 'ubuntu-latest'
+        # libwebkit2gtk-4.1-dev is required by the desktop_webview_window
+        # plugin's CMake configure; without it, FindPkgConfig fails the
+        # build step.
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build pkg-config \
-            libgtk-3-dev liblzma-dev libstdc++-12-dev
+            libgtk-3-dev liblzma-dev libstdc++-12-dev \
+            libwebkit2gtk-4.1-dev
 
       - name: Install dependencies
         working-directory: apps/synapse_app

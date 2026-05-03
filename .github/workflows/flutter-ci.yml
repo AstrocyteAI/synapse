@@ -77,11 +77,15 @@ jobs:
           - os: ubuntu-latest
             target: linux
             build-cmd: flutter build linux --debug
+            # libwebkit2gtk-4.1-dev is required by the desktop_webview_window
+            # Flutter plugin that ships transitively with the app. CMake's
+            # FindPkgConfig fails the configure step without it.
             setup: |
               sudo apt-get update -q
               sudo apt-get install -y --no-install-recommends \
                 clang cmake ninja-build pkg-config \
-                libgtk-3-dev liblzma-dev libstdc++-12-dev
+                libgtk-3-dev liblzma-dev libstdc++-12-dev \
+                libwebkit2gtk-4.1-dev
           - os: windows-latest
             target: windows
             build-cmd: flutter build windows --debug
