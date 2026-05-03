@@ -73,24 +73,21 @@ jobs:
         include:
           - os: macos-latest
             target: macos
-            build-cmd: flutter build macos --release
-            artifact-path: apps/synapse_app/build/macos/Build/Products/Release/synapse_app.app
+            job-name: release-macos-dmg
+            artifact-glob: "*.dmg"
             asset-name: synapse-macos
-            archive-cmd: zip -r
 
           - os: windows-latest
             target: windows
-            build-cmd: flutter build windows --release
-            artifact-path: apps/synapse_app/build/windows/x64/runner/Release
+            job-name: release-windows-exe
+            artifact-glob: "*.exe"
             asset-name: synapse-windows
-            archive-cmd: Compress-Archive -Path
 
           - os: ubuntu-latest
             target: linux
-            build-cmd: flutter build linux --release
-            artifact-path: apps/synapse_app/build/linux/x64/release/bundle
+            job-name: release-linux-appimage
+            artifact-glob: "*.AppImage"
             asset-name: synapse-linux
-            archive-cmd: tar -czf
 
     steps:
       - uses: actions/checkout@v5
@@ -101,18 +98,38 @@ jobs:
           channel: stable
           cache: true
 
+      # ---------------------------------------------------------------------
+      # Per-platform tooling. Each platform's flutter_distributor target
+      # depends on a native packaging tool that doesn't ship with the
+      # GitHub runner image:
+      #   • Linux  — appimagetool (via apt) + libfuse2 + desktop-file-utils
+      #   • macOS  — appdmg (via npm)
+      #   • Windows — NSIS (via Chocolatey)
+      # ---------------------------------------------------------------------
       - name: Platform setup (Linux)
         if: matrix.os == 'ubuntu-latest'
-        # libwebkit2gtk-4.1-dev is required by the desktop_webview_window
-        # plugin's CMake configure; without it, FindPkgConfig fails the
-        # build step.
+        # libwebkit2gtk-4.1-dev is required by desktop_webview_window's
+        # CMake configure (transitive dep via casdoor_flutter_sdk).
+        # libfuse2 is required at runtime by AppImage to mount the bundle.
         run: |
           sudo apt-get update -q
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build pkg-config \
             libgtk-3-dev liblzma-dev libstdc++-12-dev \
-            libwebkit2gtk-4.1-dev
+            libwebkit2gtk-4.1-dev \
+            libfuse2 desktop-file-utils
 
+      - name: Platform setup (macOS)
+        if: matrix.os == 'macos-latest'
+        run: npm install -g appdmg
+
+      - name: Platform setup (Windows)
+        if: matrix.os == 'windows-latest'
+        run: choco install -y nsis
+
+      # ---------------------------------------------------------------------
+      # Common build pipeline — all three platforms via flutter_distributor.
+      # ---------------------------------------------------------------------
       - name: Install dependencies
         working-directory: apps/synapse_app
         run: flutter pub get
@@ -120,70 +137,53 @@ jobs:
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
 
-      - name: Build (macOS / Windows)
-        # Linux skips this step — flutter_distributor builds + packages
-        # in one go to produce the AppImage. Calling flutter build first
-        # would duplicate work.
-        if: matrix.os != 'ubuntu-latest'
+      - name: Install flutter_distributor
+        run: dart pub global activate flutter_distributor
+
+      - name: Build release artifact
         working-directory: apps/synapse_app
-        run: ${{ matrix.build-cmd }}
+        run: flutter_distributor release --name=production --jobs=${{ matrix.job-name }}
 
       # ---------------------------------------------------------------------
-      # Linux — AppImage via flutter_distributor (single-file binary that
-      # bundles GTK, webkit2gtk, glib, etc. so end users don't need any
-      # apt install before running). See apps/synapse_app/distribute_options.yaml.
+      # Stage the produced artifact for the GitHub Release upload step.
+      # flutter_distributor drops outputs under dist/<version>/<job>/ — we
+      # find by glob and rename to a stable shape: synapse-<os>-<tag>.<ext>.
       # ---------------------------------------------------------------------
-      - name: Install AppImage tooling
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          # libfuse2 is needed at runtime by AppImage to mount the bundle;
-          # desktop-file-utils provides validate-desktop-file used by
-          # appimagetool to sanity-check the .desktop entry.
-          sudo apt-get install -y --no-install-recommends \
-            libfuse2 desktop-file-utils
-          dart pub global activate flutter_distributor
-
-      - name: Build AppImage
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: apps/synapse_app
-        run: |
-          flutter_distributor release \
-            --name=production \
-            --jobs=release-linux-appimage
-
-      - name: Locate AppImage and stage for release
-        if: matrix.os == 'ubuntu-latest'
+      - name: Stage artifact (Unix shells)
+        if: matrix.os != 'windows-latest'
         working-directory: apps/synapse_app
         run: |
           set -euo pipefail
           TAG=${{ github.ref_name }}
-          # flutter_distributor drops outputs under dist/<version>/<name>/
-          APPIMAGE=$(find dist -name '*.AppImage' -type f | head -1)
-          if [ -z "${APPIMAGE}" ]; then
-            echo "::error::No .AppImage produced — check flutter_distributor output above"
-            ls -la dist/ || true
+          ARTIFACT=$(find dist -name '${{ matrix.artifact-glob }}' -type f | head -1)
+          if [ -z "${ARTIFACT}" ]; then
+            echo "::error::No artifact matching ${{ matrix.artifact-glob }} produced"
+            ls -laR dist/ || true
             exit 1
           fi
-          mv "${APPIMAGE}" "synapse-linux-${TAG}.AppImage"
-          chmod +x "synapse-linux-${TAG}.AppImage"
-          echo "ASSET=apps/synapse_app/synapse-linux-${TAG}.AppImage" >> $GITHUB_ENV
+          EXT="${ARTIFACT##*.}"
+          NAME="${{ matrix.asset-name }}-${TAG}.${EXT}"
+          mv "${ARTIFACT}" "${NAME}"
+          # AppImage needs the executable bit; the others don't care.
+          chmod +x "${NAME}" || true
+          echo "ASSET=apps/synapse_app/${NAME}" >> $GITHUB_ENV
 
-      - name: Package (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          TAG=${{ github.ref_name }}
-          NAME="${{ matrix.asset-name }}-${TAG}"
-          zip -r "${NAME}.zip" "${{ matrix.artifact-path }}"
-          echo "ASSET=${NAME}.zip" >> $GITHUB_ENV
-
-      - name: Package (Windows)
+      - name: Stage artifact (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
+        working-directory: apps/synapse_app
         run: |
           $tag = "${{ github.ref_name }}"
-          $name = "${{ matrix.asset-name }}-${tag}"
-          Compress-Archive -Path "${{ matrix.artifact-path }}\*" -DestinationPath "${name}.zip"
-          echo "ASSET=${name}.zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $artifact = Get-ChildItem -Path dist -Recurse -Filter '${{ matrix.artifact-glob }}' | Select-Object -First 1
+          if (-not $artifact) {
+            Write-Error "No artifact matching ${{ matrix.artifact-glob }} produced"
+            Get-ChildItem -Path dist -Recurse | Format-List
+            exit 1
+          }
+          $ext = $artifact.Extension.TrimStart('.')
+          $name = "${{ matrix.asset-name }}-${tag}.${ext}"
+          Move-Item -Path $artifact.FullName -Destination $name
+          echo "ASSET=apps/synapse_app/${name}" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

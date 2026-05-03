@@ -1,0 +1,12 @@
+# flutter_distributor — Windows NSIS installer make_config.
+#
+# Produces an .exe installer that:
+#   • Installs Synapse to %ProgramFiles%\Synapse (per-machine) by default
+#   • Adds a Start menu shortcut
+#   • Registers an Uninstall entry in Add/Remove Programs
+#
+# Uses NSIS underneath. The Windows runner installs NSIS via Chocolatey
+# in the release workflow.
+
+display_name: Synapse
+publisher: Odeon Consulting Group

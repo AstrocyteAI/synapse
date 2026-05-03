@@ -25,15 +25,27 @@ releases:
         package_target: appimage
 
       # -----------------------------------------------------------------
-      # macOS — .dmg (uncomment when migrating off the current zip flow)
+      # macOS — .dmg (drag-to-Applications style)
       # -----------------------------------------------------------------
-      # - name: release-macos-dmg
-      #   package_platform: macos
-      #   package_target: dmg
+      # Notes:
+      #   • Without an Apple Developer ID + notarization, end users will
+      #     see "App can't be opened — Apple cannot verify it." Workaround:
+      #     System Settings → Privacy & Security → "Open Anyway."
+      #   • Real fix is code-signing in CI; defer until public distribution
+      #     warrants the cost ($99/yr Apple Developer Program).
+      - name: release-macos-dmg
+        package_platform: macos
+        package_target: dmg
 
       # -----------------------------------------------------------------
-      # Windows — NSIS installer (uncomment when migrating off zip)
+      # Windows — NSIS installer (.exe)
       # -----------------------------------------------------------------
-      # - name: release-windows-exe
-      #   package_platform: windows
-      #   package_target: exe
+      # Notes:
+      #   • Without a code-signing cert, the installer triggers Windows
+      #     SmartScreen ("Unrecognized publisher"). Users click "More info"
+      #     → "Run anyway."
+      #   • Real fix is OV/EV code-signing certificate (~$300/yr+).
+      #     Defer until public distribution.
+      - name: release-windows-exe
+        package_platform: windows
+        package_target: exe

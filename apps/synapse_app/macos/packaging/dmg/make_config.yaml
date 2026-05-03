@@ -1,0 +1,9 @@
+# flutter_distributor — macOS .dmg make_config.
+#
+# flutter_distributor invokes `appdmg` (Node.js) under the hood to
+# build the DMG. The .app bundle from `flutter build macos --release`
+# is dragged to /Applications via the standard "drag-to-install"
+# layout. No background image / volume icon configured yet — defaults
+# work fine for v0.1; polish for v0.2 if marketing demands it.
+
+display_name: Synapse
