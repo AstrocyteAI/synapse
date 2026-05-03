@@ -297,6 +297,7 @@
           "contract_version": { "type": "string" },
           "multi_tenant": { "type": "boolean" },
           "billing": { "type": "boolean" },
+          "auth_mode": { "type": "string", "enum": ["jwt_hs256", "jwt_oidc", "local"] },
           "features": {
             "type": "object",
             "properties": {
@@ -311,7 +312,7 @@
             "required": ["notifications", "audit_log", "saml_sso", "scim", "compliance_ui", "quotas", "tenant_admin"]
           }
         },
-        "required": ["backend", "version", "contract_version", "multi_tenant", "billing", "features"]
+        "required": ["backend", "version", "contract_version", "multi_tenant", "billing", "auth_mode", "features"]
       },
       "MemoryRecallResponse": {
         "type": "object",

@@ -44,6 +44,11 @@ class BackendInfo(BaseModel):
     contract_version: str  # "v1"
     multi_tenant: bool
     billing: bool
+    # auth_mode drives the client login UI:
+    #   "jwt_hs256"  — dev mode, paste a token
+    #   "local"      — built-in email/password (POST /v1/auth/login)
+    #   "jwt_oidc"   — external OIDC IdP (used by Cerebro + Casdoor)
+    auth_mode: str
     features: FeatureFlagsOut
 
 
@@ -67,6 +72,7 @@ def _read_feature(ff: Any, key: str) -> bool:
 )
 async def get_info(request: Request) -> BackendInfo:
     ff = getattr(request.app.state, "feature_flags", None)
+    settings = request.app.state.settings
     return BackendInfo(
         backend="synapse",
         version="0.1.0",
@@ -75,6 +81,7 @@ async def get_info(request: Request) -> BackendInfo:
         # See docs/_design/multi-tenancy.md for rationale.
         multi_tenant=False,
         billing=False,
+        auth_mode=settings.synapse_auth_mode,
         features=FeatureFlagsOut(
             notifications=_read_feature(ff, "notifications"),
             audit_log=_read_feature(ff, "audit_logs"),

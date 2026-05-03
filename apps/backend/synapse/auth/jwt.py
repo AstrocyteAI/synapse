@@ -75,7 +75,9 @@ def _build_user(payload: dict[str, Any]) -> AuthenticatedUser:
     if not sub or not isinstance(sub, str):
         raise HTTPException(status_code=401, detail="Token missing sub claim")
 
-    roles_claim = payload.get("synapse_roles", [])
+    # Support both 'synapse_roles' (list, HS256 dev tokens) and
+    # 'synapse_role' (singular string, Casdoor + local auth — matches migration claim name).
+    roles_claim = payload.get("synapse_roles") or payload.get("synapse_role", [])
     roles = roles_claim if isinstance(roles_claim, list) else [roles_claim]
 
     tenant_raw = payload.get("synapse_tenant")
@@ -146,6 +148,21 @@ async def get_current_user(
 
     if settings.synapse_auth_mode == "jwt_hs256":
         payload = _decode_hs256(token, settings)
+    elif settings.synapse_auth_mode == "local":
+        # Tokens were issued by us — validate directly from the in-memory public key.
+        # No network call needed; avoids a circular dependency on our own JWKS endpoint.
+        from synapse.auth.local import _public_key as _local_public_key
+
+        try:
+            public_key = _local_public_key(settings.synapse_local_jwt_public_key)
+            decode_kwargs: dict[str, Any] = {
+                "algorithms": ["RS256"],
+                "audience": settings.synapse_jwt_audience or None,
+                "issuer": settings.synapse_local_jwt_issuer,
+            }
+            payload = jwt.decode(token, public_key, **decode_kwargs)
+        except PyJWTError as exc:
+            raise HTTPException(status_code=401, detail=f"Invalid token: {exc}") from exc
     else:
         payload = _decode_oidc(token, settings)
 

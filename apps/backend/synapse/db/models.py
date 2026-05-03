@@ -377,6 +377,36 @@ class DSARType(StrEnum):
     rectification = "rectification"
 
 
+# ---------------------------------------------------------------------------
+# Local auth — User accounts (SYNAPSE_AUTH_MODE=local)
+# ---------------------------------------------------------------------------
+
+
+class User(Base):
+    """Local user account for built-in email/password authentication.
+
+    Used when SYNAPSE_AUTH_MODE=local.  Not created in jwt_hs256 or jwt_oidc
+    modes where identity comes from a static secret or an external IdP.
+
+    On migration to Cerebro the ``id`` UUID is preserved as the Casdoor user
+    ID so the ``sub`` claim stays identical and no principal reconciliation
+    is needed.
+    """
+
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    # "member" | "admin"
+    role: Mapped[str] = mapped_column(String(50), nullable=False, default="member")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class DSARRequest(Base):
     """A data-subject's request to access, correct, or erase their data.
 

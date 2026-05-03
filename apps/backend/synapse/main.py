@@ -21,6 +21,7 @@ from synapse.routers import (
     analytics,
     api_keys,
     audit_logs,
+    auth,
     centrifugo_router,
     contributions,
     councils,
@@ -32,6 +33,7 @@ from synapse.routers import (
     templates,
     threads,
     webhooks,
+    well_known,
 )
 from synapse.scheduling.runner import ScheduledCouncilRunner, restore_from_db
 
@@ -118,7 +120,10 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Well-known endpoints — no /v1 prefix (standard paths)
+    app.include_router(well_known.router)
     app.include_router(info.router, prefix="/v1")
+    app.include_router(auth.router, prefix="/v1")
     app.include_router(analytics.router, prefix="/v1")
     app.include_router(councils.router, prefix="/v1")
     app.include_router(contributions.router, prefix="/v1")

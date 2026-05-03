@@ -26,13 +26,22 @@ class Settings(BaseSettings):
     centrifugo_token_ttl_seconds: int = 3600
 
     # --- Auth ---
-    synapse_auth_mode: Literal["jwt_hs256", "jwt_oidc"] = "jwt_hs256"
+    synapse_auth_mode: Literal["jwt_hs256", "jwt_oidc", "local"] = "jwt_hs256"
     # HS256 (dev)
     synapse_jwt_secret: str = "dev-jwt-secret-change-in-production"
     synapse_jwt_audience: str = "synapse"
-    # RS256 OIDC (production)
+    # RS256 OIDC (production — external IdP such as Casdoor/Cerebro)
     synapse_jwt_jwks_url: str = ""
     synapse_jwt_issuer: str = ""
+    # Local auth (SYNAPSE_AUTH_MODE=local) — built-in email/password, RS256 JWT issuance
+    # Generate keys: openssl genrsa -out synapse-private.pem 2048
+    #                openssl rsa -in synapse-private.pem -pubout -out synapse-public.pem
+    # Then set SYNAPSE_LOCAL_JWT_PRIVATE_KEY and SYNAPSE_LOCAL_JWT_PUBLIC_KEY to the PEM contents.
+    synapse_local_jwt_private_key: str = ""  # RS256 private key PEM
+    synapse_local_jwt_public_key: str = ""  # RS256 public key PEM
+    synapse_local_jwt_issuer: str = "http://localhost:8000"
+    synapse_local_jwt_ttl_seconds: int = 3600
+    synapse_local_registration_open: bool = True  # False = only admins can create users
 
     # --- LLM ---
     synapse_llm_provider: Literal["litellm"] = "litellm"
