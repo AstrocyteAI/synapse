@@ -2,15 +2,18 @@
 #
 # https://github.com/leanflutter/flutter_distributor
 #
-# Currently configured for Linux AppImage. macOS .dmg and Windows .exe
-# are sketched below, commented out — uncomment when ready to migrate
-# off the current zip/tar release approach for those platforms.
+# All three desktop targets ship via flutter_distributor:
+#   • Linux   → AppImage (bundles GTK + webkit2gtk; runs on any distro)
+#   • macOS   → .dmg     (drag-to-Applications)
+#   • Windows → .exe     (NSIS installer with Start menu + uninstaller)
 #
-# Local build:
+# Local build (one job at a time):
 #   dart pub global activate flutter_distributor
 #   flutter_distributor release --name=production --jobs=release-linux-appimage
+#   flutter_distributor release --name=production --jobs=release-macos-dmg
+#   flutter_distributor release --name=production --jobs=release-windows-exe
 #
-# Output lands at: dist/<version>/<asset>
+# Outputs land at: dist/<version>/<job-name>/
 
 output: dist/
 
@@ -23,6 +26,10 @@ releases:
       - name: release-linux-appimage
         package_platform: linux
         package_target: appimage
+        # flutter_distributor 0.6.6 requires this key even when empty —
+        # ReleaseJob.fromJson casts it to Map<String, dynamic> without
+        # a null check. Leave as `{}` until we need per-target options.
+        package_options: {}
 
       # -----------------------------------------------------------------
       # macOS — .dmg (drag-to-Applications style)
@@ -36,6 +43,7 @@ releases:
       - name: release-macos-dmg
         package_platform: macos
         package_target: dmg
+        package_options: {}
 
       # -----------------------------------------------------------------
       # Windows — NSIS installer (.exe)
@@ -49,3 +57,4 @@ releases:
       - name: release-windows-exe
         package_platform: windows
         package_target: exe
+        package_options: {}
