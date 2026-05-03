@@ -13,13 +13,22 @@
 title: Synapse
 
 contents:
-  # The .app bundle (drag source). Path is relative to the cwd where
-  # flutter_distributor runs (apps/synapse_app/), and points at the
-  # Flutter release bundle output.
+  # The .app bundle (drag source).
+  #
+  # Path is resolved relative to appdmg's working directory, which is
+  # the per-build staging dir flutter_distributor creates at:
+  #   dist/<version>/<job>-macos_dmg/
+  #
+  # flutter_distributor pre-stages by copying:
+  #   build/macos/Build/Products/Release/synapse_app.app  →  <staging>/synapse_app.app
+  #
+  # So `path:` is just the basename, NOT the original Flutter build path.
+  # The first failed config was `build/macos/Build/Products/Release/synapse_app.app`
+  # which appdmg joined onto the staging dir and couldn't find.
   - x: 110
     y: 150
     type: file
-    path: build/macos/Build/Products/Release/synapse_app.app
+    path: synapse_app.app
 
   # /Applications shortcut (drag target). type=link tells appdmg to
   # create a symlink in the DMG.
