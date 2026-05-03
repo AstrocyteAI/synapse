@@ -27,6 +27,18 @@ import type {
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 const TOKEN_KEY = 'synapse_token';
 
+// Set VITE_IS_CEREBRO=true when deploying against a Cerebro backend.
+// Cerebro wraps every REST response in {"data": ...}; this flag makes
+// request() strip that envelope transparently so all callers stay unchanged.
+const IS_CEREBRO = import.meta.env.VITE_IS_CEREBRO === 'true';
+
+function unwrap<T>(json: unknown): T {
+	if (IS_CEREBRO && typeof json === 'object' && json !== null && 'data' in json) {
+		return (json as { data: T }).data;
+	}
+	return json as T;
+}
+
 // ---------------------------------------------------------------------------
 // Auth
 // ---------------------------------------------------------------------------
@@ -60,7 +72,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 		const text = await res.text().catch(() => res.statusText);
 		throw new Error(`${res.status} ${text}`);
 	}
-	return res.json() as Promise<T>;
+	return unwrap<T>(await res.json());
 }
 
 // ---------------------------------------------------------------------------
@@ -272,7 +284,7 @@ export async function getBackendInfo(): Promise<BackendInfo> {
 	// client can call it before login.
 	const res = await fetch(`${API_BASE}/v1/info`);
 	if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => res.statusText)}`);
-	return res.json();
+	return unwrap<BackendInfo>(await res.json());
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
-import '../../core/realtime/centrifugo.dart';
 import '../../widgets/council_status_badge.dart';
 import '../../widgets/verdict_card.dart';
 import '../../widgets/conflict_banner.dart';
@@ -11,15 +10,11 @@ import '../chat/chat_screen.dart';
 class CouncilDetailScreen extends StatefulWidget {
   final String sessionId;
   final SynapseApiClient client;
-  final CentrifugoClient centrifugoClient;
-  final String? centrifugoWsUrl;
 
   const CouncilDetailScreen({
     super.key,
     required this.sessionId,
     required this.client,
-    required this.centrifugoClient,
-    this.centrifugoWsUrl,
   });
 
   @override
@@ -131,15 +126,11 @@ class _CouncilDetailScreenState extends State<CouncilDetailScreen> {
                           council: council,
                           onApprove: _handleApprove,
                           client: widget.client,
-                          centrifugoClient: widget.centrifugoClient,
-                          centrifugoWsUrl: widget.centrifugoWsUrl,
                         )
                       : _NarrowLayout(
                           council: council,
                           onApprove: _handleApprove,
                           client: widget.client,
-                          centrifugoClient: widget.centrifugoClient,
-                          centrifugoWsUrl: widget.centrifugoWsUrl,
                         ),
     );
   }
@@ -248,15 +239,11 @@ class _WideLayout extends StatelessWidget {
   final CouncilDetail council;
   final VoidCallback onApprove;
   final SynapseApiClient client;
-  final CentrifugoClient centrifugoClient;
-  final String? centrifugoWsUrl;
 
   const _WideLayout({
     required this.council,
     required this.onApprove,
     required this.client,
-    required this.centrifugoClient,
-    this.centrifugoWsUrl,
   });
 
   @override
@@ -275,8 +262,6 @@ class _WideLayout extends StatelessWidget {
             threadId: council.sessionId,
             councilStatus: council.status,
             client: client,
-            centrifugoClient: centrifugoClient,
-            centrifugoWsUrl: centrifugoWsUrl,
           ),
         ),
       ],
@@ -288,15 +273,11 @@ class _NarrowLayout extends StatelessWidget {
   final CouncilDetail council;
   final VoidCallback onApprove;
   final SynapseApiClient client;
-  final CentrifugoClient centrifugoClient;
-  final String? centrifugoWsUrl;
 
   const _NarrowLayout({
     required this.council,
     required this.onApprove,
     required this.client,
-    required this.centrifugoClient,
-    this.centrifugoWsUrl,
   });
 
   @override
@@ -320,8 +301,6 @@ class _NarrowLayout extends StatelessWidget {
                   threadId: council.sessionId,
                   councilStatus: council.status,
                   client: client,
-                  centrifugoClient: centrifugoClient,
-                  centrifugoWsUrl: centrifugoWsUrl,
                 ),
               ],
             ),

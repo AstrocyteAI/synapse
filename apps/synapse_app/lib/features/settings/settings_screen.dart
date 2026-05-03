@@ -63,7 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed != true || !mounted) return;
 
     await widget.tokenStore.clearToken();
-    await widget.serverStore.clearUrl();
+    await widget.serverStore.clear();
     widget.onServerCleared();
 
     if (mounted) context.go('/server-setup');

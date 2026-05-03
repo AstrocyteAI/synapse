@@ -17,12 +17,18 @@ class ApiException implements Exception {
 class SynapseApiClient {
   // Non-final: updated when the user switches server without a full app restart.
   String baseUrl;
+
+  // Cerebro wraps every REST response in {"data": ...}.  Set true when the
+  // live server is a Cerebro backend so _unwrap/_unwrapList strip the envelope.
+  bool isCerebro;
+
   final TokenStore tokenStore;
   final http.Client _httpClient;
 
   SynapseApiClient({
     required this.baseUrl,
     required this.tokenStore,
+    this.isCerebro = false,
     http.Client? httpClient,
   }) : _httpClient = httpClient ?? http.Client();
 
@@ -50,6 +56,25 @@ class SynapseApiClient {
     }
   }
 
+  /// Strips Cerebro's `{"data": {...}}` envelope for single-object responses.
+  Map<String, dynamic> _unwrap(Map<String, dynamic> body) {
+    if (isCerebro) {
+      final data = body['data'];
+      if (data is Map<String, dynamic>) return data;
+    }
+    return body;
+  }
+
+  /// Strips Cerebro's `{"data": [...]}` envelope for list responses.
+  List<dynamic> _unwrapList(dynamic decoded) {
+    if (isCerebro && decoded is Map<String, dynamic>) {
+      final data = decoded['data'];
+      if (data is List) return data;
+    }
+    if (decoded is List) return decoded;
+    return const [];
+  }
+
   Future<List<CouncilSummary>> listCouncils({
     int limit = 50,
     int offset = 0,
@@ -58,7 +83,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/councils?limit=$limit&offset=$offset');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
+    final list = _unwrapList(jsonDecode(response.body));
     return list
         .map((e) => CouncilSummary.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -70,7 +95,7 @@ class SynapseApiClient {
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     return CouncilDetail.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -92,7 +117,7 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return CreateCouncilResponse.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -130,7 +155,7 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return ContributeResponse.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -147,7 +172,7 @@ class SynapseApiClient {
     ).replace(queryParameters: params);
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
+    final list = _unwrapList(jsonDecode(response.body));
     return list
         .map((e) => ThreadEvent.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -164,7 +189,7 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return ChatResponse.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -173,7 +198,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/templates');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final list = jsonDecode(response.body) as List<dynamic>;
+    final list = _unwrapList(jsonDecode(response.body));
     return list
         .map((e) => Template.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -184,7 +209,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/centrifugo/token');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     return body['token'] as String;
   }
 
@@ -194,7 +219,7 @@ class SynapseApiClient {
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     return RealtimeDescriptor.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -204,7 +229,12 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/info');
     final response = await _httpClient.get(uri);
     _checkResponse(response);
-    return BackendInfo.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    final raw = jsonDecode(response.body) as Map<String, dynamic>;
+    // Cerebro wraps /v1/info too — strip the envelope before parsing.
+    final body = raw['data'] is Map<String, dynamic>
+        ? raw['data'] as Map<String, dynamic>
+        : raw;
+    return BackendInfo.fromJson(body);
   }
 
   // ─── Notifications (B10 / W9 / F3) ────────────────────────────────────────
@@ -215,7 +245,7 @@ class SynapseApiClient {
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
     return NotificationPreferences.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -238,7 +268,7 @@ class SynapseApiClient {
     );
     _checkResponse(response);
     return NotificationPreferences.fromJson(
-      jsonDecode(response.body) as Map<String, dynamic>,
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
     );
   }
 
@@ -247,7 +277,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/notifications/devices');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['devices'] as List<dynamic>?) ?? [];
     return list.map((e) => DeviceToken.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -266,7 +296,9 @@ class SynapseApiClient {
       body: jsonEncode(body),
     );
     _checkResponse(response);
-    return DeviceToken.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return DeviceToken.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
   }
 
   Future<void> deleteDeviceToken(String tokenId) async {
@@ -281,7 +313,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/notifications/feed?limit=$limit');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['items'] as List<dynamic>?) ?? [];
     return list.map((e) => FeedItem.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -300,7 +332,7 @@ class SynapseApiClient {
     );
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     final list = (body['hits'] as List<dynamic>?) ?? [];
     return list.map((e) => MemoryHit.fromJson(e as Map<String, dynamic>)).toList();
   }
@@ -312,7 +344,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/analytics/consensus');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    return _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<Map<String, dynamic>> getAnalyticsVelocity({int days = 30}) async {
@@ -320,7 +352,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/analytics/velocity?days=$days');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    return jsonDecode(response.body) as Map<String, dynamic>;
+    return _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<List<dynamic>> getAnalyticsMembers({int limit = 20}) async {
@@ -328,7 +360,7 @@ class SynapseApiClient {
     final uri = Uri.parse('$baseUrl/v1/analytics/members?limit=$limit');
     final response = await _httpClient.get(uri, headers: headers);
     _checkResponse(response);
-    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     return (body['data'] as List<dynamic>?) ?? [];
   }
 }

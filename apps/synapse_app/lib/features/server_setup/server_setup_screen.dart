@@ -9,17 +9,19 @@ import '../../core/auth/token_store.dart';
 ///
 /// The user enters a server URL; the app calls GET /v1/info to validate
 /// it and display the backend name + version before committing.  On
-/// confirm, the URL is persisted and the user is sent to /login.
+/// confirm, the URL and backend type are persisted and the user is sent
+/// to /login.
 ///
-/// Also used when switching backends: the caller clears the token and
-/// server URL before pushing this route, so it acts as a clean slate.
+/// Backend detection: Cerebro wraps /v1/info in `{"data": {...}}`.  Any
+/// response with a top-level `data` object is treated as Cerebro so the
+/// client can unwrap its response envelope everywhere else.
 class ServerSetupScreen extends StatefulWidget {
   final ServerStore serverStore;
   final TokenStore tokenStore;
 
-  /// Called with the confirmed URL so the app can update the live client
-  /// without a full restart.
-  final void Function(String url) onServerConfigured;
+  /// Called with the confirmed URL and whether it is a Cerebro backend.
+  /// Allows the app to update the live API client without a full restart.
+  final void Function(String url, bool isCerebro) onServerConfigured;
 
   const ServerSetupScreen({
     super.key,
@@ -70,13 +72,20 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
         return;
       }
 
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final raw = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Cerebro wraps /v1/info in {"data": {...}}; Synapse returns bare JSON.
+      final isCerebro = raw['data'] is Map<String, dynamic>;
+      final body =
+          isCerebro ? raw['data'] as Map<String, dynamic> : raw;
+
       setState(() {
         _preview = _BackendPreview(
           url: url,
           name: (body['name'] as String?) ?? 'Synapse',
           version: (body['version'] as String?) ?? '',
           multiTenant: (body['multi_tenant'] as bool?) ?? false,
+          isCerebro: isCerebro,
         );
         _checking = false;
       });
@@ -99,7 +108,8 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     if (preview == null) return;
 
     await widget.serverStore.setUrl(preview.url);
-    widget.onServerConfigured(preview.url);
+    await widget.serverStore.setIsCerebro(preview.isCerebro);
+    widget.onServerConfigured(preview.url, preview.isCerebro);
 
     if (mounted) context.go('/login');
   }
@@ -203,12 +213,14 @@ class _BackendPreview {
   final String name;
   final String version;
   final bool multiTenant;
+  final bool isCerebro;
 
   const _BackendPreview({
     required this.url,
     required this.name,
     required this.version,
     required this.multiTenant,
+    required this.isCerebro,
   });
 }
 

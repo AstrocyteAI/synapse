@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
-import '../../core/realtime/centrifugo.dart';
+import '../../core/realtime/realtime_client.dart';
 import '../../widgets/thread_entry.dart';
 import '../../widgets/directive_input.dart';
 
@@ -11,8 +11,6 @@ class ChatScreen extends StatefulWidget {
   final String threadId;
   final String councilStatus;
   final SynapseApiClient client;
-  final CentrifugoClient centrifugoClient;
-  final String? centrifugoWsUrl;
 
   const ChatScreen({
     super.key,
@@ -20,8 +18,6 @@ class ChatScreen extends StatefulWidget {
     required this.threadId,
     required this.councilStatus,
     required this.client,
-    required this.centrifugoClient,
-    this.centrifugoWsUrl,
   });
 
   @override
@@ -31,7 +27,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final List<ThreadEvent> _events = [];
   final ScrollController _scrollController = ScrollController();
-  StreamSubscription<Map<String, dynamic>>? _subscription;
+  SynapseRealtimeClient? _realtimeClient;
+  StreamSubscription<NormalizedRealtimeEvent>? _subscription;
   bool _loading = true;
   String? _error;
   String _status = '';
@@ -72,26 +69,25 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _connectRealtime() async {
-    final wsUrl = widget.centrifugoWsUrl;
-    if (wsUrl == null) return;
     try {
-      final token = await widget.client.getCentrifugoToken();
-      await widget.centrifugoClient.connect(wsUrl, token);
-      final stream =
-          widget.centrifugoClient.subscribeToThread(widget.threadId);
+      final descriptor = await widget.client.getRealtimeDescriptor();
+      _realtimeClient = SynapseRealtimeClient.fromDescriptor(descriptor);
+      await _realtimeClient!.connect();
+      final stream = _realtimeClient!.subscribe('thread:${widget.threadId}');
       _subscription = stream.listen(_onRealtimeEvent);
     } catch (_) {
       // Realtime not critical — polling via load is fallback
     }
   }
 
-  void _onRealtimeEvent(Map<String, dynamic> data) {
+  void _onRealtimeEvent(NormalizedRealtimeEvent event) {
     if (!mounted) return;
     try {
-      final event = ThreadEvent.fromJson(data);
+      final threadEvent = ThreadEvent.fromJson(event.payload);
       setState(() {
-        _events.add(event);
-        if (event.eventType == 'verdict' || event.eventType == 'council_closed') {
+        _events.add(threadEvent);
+        if (threadEvent.eventType == 'verdict' ||
+            threadEvent.eventType == 'council_closed') {
           _status = 'closed';
         }
       });
@@ -199,6 +195,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _realtimeClient?.disconnect();
     _scrollController.dispose();
     super.dispose();
   }

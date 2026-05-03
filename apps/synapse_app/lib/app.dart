@@ -4,7 +4,6 @@ import 'core/api/client.dart';
 import 'core/auth/token_store.dart';
 import 'core/config/server_store.dart';
 import 'core/notifications/notification_service.dart';
-import 'core/realtime/centrifugo.dart';
 import 'features/analytics/analytics_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/councils/council_list_screen.dart';
@@ -29,7 +28,6 @@ class _SynapseAppState extends State<SynapseApp> {
   late final TokenStore _tokenStore;
   late final ServerStore _serverStore;
   late final SynapseApiClient _client;
-  late final CentrifugoClient _centrifugoClient;
   late final NotificationService _notifications;
   late final GoRouter _router;
 
@@ -39,10 +37,10 @@ class _SynapseAppState extends State<SynapseApp> {
     _tokenStore = TokenStore();
     _serverStore = ServerStore();
 
-    // baseUrl starts empty; the redirect below sets it from ServerStore on
-    // every navigation so the client is always in sync with stored state.
+    // baseUrl and isCerebro start empty/false; the redirect below syncs them
+    // from ServerStore on every navigation so the client is always in step
+    // with stored state.
     _client = SynapseApiClient(baseUrl: '', tokenStore: _tokenStore);
-    _centrifugoClient = CentrifugoClient();
     _notifications = NotificationService();
     _notifications.initialize();
 
@@ -54,7 +52,10 @@ class _SynapseAppState extends State<SynapseApp> {
         final isSetup = loc == '/server-setup';
 
         // Keep the live client in sync whenever routing occurs.
-        if (serverUrl != null) _client.baseUrl = serverUrl;
+        if (serverUrl != null) {
+          _client.baseUrl = serverUrl;
+          _client.isCerebro = await _serverStore.getIsCerebro();
+        }
 
         if (serverUrl == null && !isSetup) return '/server-setup';
 
@@ -76,7 +77,10 @@ class _SynapseAppState extends State<SynapseApp> {
           builder: (context, state) => ServerSetupScreen(
             serverStore: _serverStore,
             tokenStore: _tokenStore,
-            onServerConfigured: (url) => _client.baseUrl = url,
+            onServerConfigured: (url, isCerebro) {
+              _client.baseUrl = url;
+              _client.isCerebro = isCerebro;
+            },
           ),
         ),
 
@@ -103,7 +107,6 @@ class _SynapseAppState extends State<SynapseApp> {
           builder: (context, state) => CouncilDetailScreen(
             sessionId: state.pathParameters['id']!,
             client: _client,
-            centrifugoClient: _centrifugoClient,
           ),
         ),
         GoRoute(
@@ -120,7 +123,6 @@ class _SynapseAppState extends State<SynapseApp> {
                 threadId: threadId,
                 councilStatus: status,
                 client: _client,
-                centrifugoClient: _centrifugoClient,
               ),
             );
           },
