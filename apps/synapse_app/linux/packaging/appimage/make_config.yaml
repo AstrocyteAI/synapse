@@ -1,9 +1,29 @@
 # flutter_distributor — AppImage make_config.
 #
-# Tells linuxdeploy + appimagetool which icon and .desktop file to use,
-# and how to name the resulting binary. Library bundling (webkit2gtk,
-# gtk, gstreamer) is handled automatically by linuxdeploy walking the
-# binary's ld-trace; we don't have to enumerate libraries here.
+# Schema: packages/flutter_app_packager/lib/src/makers/appimage/make_appimage_config.dart
+#
+# IMPORTANT — `icon:` is resolved literally as File(<value>) at runtime,
+# relative to whichever directory flutter_distributor was invoked from
+# (i.e. apps/synapse_app/). It is NOT relative to this make_config.yaml.
+# Hence the path below starts at the project-root-relative location.
+#
+# IMPORTANT — flutter_distributor auto-generates the .desktop entry from
+# the fields below (display_name → Name, categories → Categories, etc.).
+# Don't hand-write a .desktop file; it'll be ignored.
 
 display_name: Synapse
-icon: synapse.png
+generic_name: Multi-agent deliberation
+icon: linux/packaging/appimage/synapse.png
+
+startup_notify: true
+
+categories:
+  - Office
+  - Productivity
+
+keywords:
+  - AI
+  - agents
+  - deliberation
+  - council
+  - memory
