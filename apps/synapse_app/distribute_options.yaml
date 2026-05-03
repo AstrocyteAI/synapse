@@ -2,6 +2,12 @@
 #
 # https://github.com/leanflutter/flutter_distributor
 #
+# Schema reference: packages/unified_distributor/lib/src/release_job.dart
+# (the README on the GitHub repo lags behind the actual source — what
+# matters is the ReleaseJob.fromJson code which expects the nested
+# `package: { platform:, target: }` shape used here, NOT the older flat
+# `package_platform:` / `package_target:` shape some examples still show).
+#
 # All three desktop targets ship via flutter_distributor:
 #   • Linux   → AppImage (bundles GTK + webkit2gtk; runs on any distro)
 #   • macOS   → .dmg     (drag-to-Applications)
@@ -24,12 +30,9 @@ releases:
       # Linux — AppImage (single-file binary, bundles system deps)
       # -----------------------------------------------------------------
       - name: release-linux-appimage
-        package_platform: linux
-        package_target: appimage
-        # flutter_distributor 0.6.6 requires this key even when empty —
-        # ReleaseJob.fromJson casts it to Map<String, dynamic> without
-        # a null check. Leave as `{}` until we need per-target options.
-        package_options: {}
+        package:
+          platform: linux
+          target: appimage
 
       # -----------------------------------------------------------------
       # macOS — .dmg (drag-to-Applications style)
@@ -41,9 +44,9 @@ releases:
       #   • Real fix is code-signing in CI; defer until public distribution
       #     warrants the cost ($99/yr Apple Developer Program).
       - name: release-macos-dmg
-        package_platform: macos
-        package_target: dmg
-        package_options: {}
+        package:
+          platform: macos
+          target: dmg
 
       # -----------------------------------------------------------------
       # Windows — NSIS installer (.exe)
@@ -55,6 +58,6 @@ releases:
       #   • Real fix is OV/EV code-signing certificate (~$300/yr+).
       #     Defer until public distribution.
       - name: release-windows-exe
-        package_platform: windows
-        package_target: exe
-        package_options: {}
+        package:
+          platform: windows
+          target: exe
