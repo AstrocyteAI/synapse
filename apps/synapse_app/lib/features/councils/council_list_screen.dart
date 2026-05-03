@@ -77,8 +77,8 @@ class _CouncilListScreenState extends State<CouncilListScreen> {
           ),
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: 'Settings / Login',
-            onPressed: () => context.push('/login'),
+            tooltip: 'Settings',
+            onPressed: () => context.push('/settings'),
           ),
         ],
       ),

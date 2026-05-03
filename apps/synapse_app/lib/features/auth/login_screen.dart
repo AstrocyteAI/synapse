@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/auth/token_store.dart';
+import '../../core/config/server_store.dart';
 
 class LoginScreen extends StatefulWidget {
   final TokenStore tokenStore;
+  final ServerStore serverStore;
 
-  const LoginScreen({super.key, required this.tokenStore});
+  const LoginScreen({
+    super.key,
+    required this.tokenStore,
+    required this.serverStore,
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -14,19 +20,22 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _controller = TextEditingController();
   String? _currentPrefix;
+  String? _serverUrl;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
-    _loadCurrentToken();
+    _load();
   }
 
-  Future<void> _loadCurrentToken() async {
+  Future<void> _load() async {
     final token = await widget.tokenStore.getToken();
-    if (token != null && mounted) {
+    final url = await widget.serverStore.getUrl();
+    if (mounted) {
       setState(() {
-        _currentPrefix = token.length > 12
+        _serverUrl = url;
+        _currentPrefix = (token != null && token.length > 12)
             ? '${token.substring(0, 12)}…'
             : token;
       });
@@ -38,9 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (token.isEmpty) return;
     setState(() => _saving = true);
     await widget.tokenStore.setToken(token);
-    if (mounted) {
-      context.go('/councils');
-    }
+    if (mounted) context.go('/councils');
   }
 
   @override
@@ -61,8 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Icon(Icons.hub,
-                    size: 48, color: Color(0xFF6366F1)),
+                const Icon(Icons.hub, size: 48, color: Color(0xFF6366F1)),
                 const SizedBox(height: 16),
                 const Text(
                   'Synapse',
@@ -73,12 +79,42 @@ class _LoginScreenState extends State<LoginScreen> {
                     color: Color(0xFF6366F1),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 const Text(
                   'Multi-agent deliberation system',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.white54),
                 ),
+                if (_serverUrl != null) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.dns, size: 13, color: Colors.white38),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          _serverUrl!,
+                          style: const TextStyle(
+                              color: Colors.white38, fontSize: 12),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      GestureDetector(
+                        onTap: () => context.go('/server-setup'),
+                        child: const Text(
+                          'Change',
+                          style: TextStyle(
+                            color: Color(0xFF6366F1),
+                            fontSize: 12,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 32),
                 if (_currentPrefix != null)
                   Padding(

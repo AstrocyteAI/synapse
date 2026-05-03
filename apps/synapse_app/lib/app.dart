@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'core/api/client.dart';
 import 'core/auth/token_store.dart';
+import 'core/config/server_store.dart';
 import 'core/notifications/notification_service.dart';
 import 'core/realtime/centrifugo.dart';
 import 'features/analytics/analytics_screen.dart';
@@ -13,17 +14,12 @@ import 'features/chat/chat_screen.dart';
 import 'features/chat/verdict_chat_screen.dart';
 import 'features/memory/memory_screen.dart';
 import 'features/notifications/notifications_screen.dart';
+import 'features/server_setup/server_setup_screen.dart';
 import 'features/settings/notifications_settings_screen.dart';
+import 'features/settings/settings_screen.dart';
 
 class SynapseApp extends StatefulWidget {
-  final String baseUrl;
-  final String? centrifugoWsUrl;
-
-  const SynapseApp({
-    super.key,
-    this.baseUrl = 'http://localhost:8000',
-    this.centrifugoWsUrl,
-  });
+  const SynapseApp({super.key});
 
   @override
   State<SynapseApp> createState() => _SynapseAppState();
@@ -31,6 +27,7 @@ class SynapseApp extends StatefulWidget {
 
 class _SynapseAppState extends State<SynapseApp> {
   late final TokenStore _tokenStore;
+  late final ServerStore _serverStore;
   late final SynapseApiClient _client;
   late final CentrifugoClient _centrifugoClient;
   late final NotificationService _notifications;
@@ -40,21 +37,31 @@ class _SynapseAppState extends State<SynapseApp> {
   void initState() {
     super.initState();
     _tokenStore = TokenStore();
-    _client = SynapseApiClient(
-      baseUrl: widget.baseUrl,
-      tokenStore: _tokenStore,
-    );
+    _serverStore = ServerStore();
+
+    // baseUrl starts empty; the redirect below sets it from ServerStore on
+    // every navigation so the client is always in sync with stored state.
+    _client = SynapseApiClient(baseUrl: '', tokenStore: _tokenStore);
     _centrifugoClient = CentrifugoClient();
     _notifications = NotificationService();
-    // Permission prompt + ntfy topic seed; idempotent.
     _notifications.initialize();
 
     _router = GoRouter(
       initialLocation: '/councils',
       redirect: (context, state) async {
+        final serverUrl = await _serverStore.getUrl();
+        final loc = state.matchedLocation;
+        final isSetup = loc == '/server-setup';
+
+        // Keep the live client in sync whenever routing occurs.
+        if (serverUrl != null) _client.baseUrl = serverUrl;
+
+        if (serverUrl == null && !isSetup) return '/server-setup';
+
         final token = await _tokenStore.getToken();
-        final isLogin = state.matchedLocation == '/login';
-        if (token == null && !isLogin) return '/login';
+        final isLogin = loc == '/login';
+        if (token == null && !isSetup && !isLogin) return '/login';
+
         return null;
       },
       routes: [
@@ -62,20 +69,34 @@ class _SynapseAppState extends State<SynapseApp> {
           path: '/',
           redirect: (_, __) => '/councils',
         ),
+
+        // ── Server setup (first run + server switch) ────────────────────────
+        GoRoute(
+          path: '/server-setup',
+          builder: (context, state) => ServerSetupScreen(
+            serverStore: _serverStore,
+            tokenStore: _tokenStore,
+            onServerConfigured: (url) => _client.baseUrl = url,
+          ),
+        ),
+
+        // ── Auth ────────────────────────────────────────────────────────────
         GoRoute(
           path: '/login',
-          builder: (context, state) =>
-              LoginScreen(tokenStore: _tokenStore),
+          builder: (context, state) => LoginScreen(
+            tokenStore: _tokenStore,
+            serverStore: _serverStore,
+          ),
         ),
+
+        // ── Councils ────────────────────────────────────────────────────────
         GoRoute(
           path: '/councils',
-          builder: (context, state) =>
-              CouncilListScreen(client: _client),
+          builder: (context, state) => CouncilListScreen(client: _client),
         ),
         GoRoute(
           path: '/councils/new',
-          builder: (context, state) =>
-              CreateCouncilScreen(client: _client),
+          builder: (context, state) => CreateCouncilScreen(client: _client),
         ),
         GoRoute(
           path: '/councils/:id',
@@ -83,7 +104,6 @@ class _SynapseAppState extends State<SynapseApp> {
             sessionId: state.pathParameters['id']!,
             client: _client,
             centrifugoClient: _centrifugoClient,
-            centrifugoWsUrl: widget.centrifugoWsUrl,
           ),
         ),
         GoRoute(
@@ -101,7 +121,6 @@ class _SynapseAppState extends State<SynapseApp> {
                 councilStatus: status,
                 client: _client,
                 centrifugoClient: _centrifugoClient,
-                centrifugoWsUrl: widget.centrifugoWsUrl,
               ),
             );
           },
@@ -113,12 +132,16 @@ class _SynapseAppState extends State<SynapseApp> {
             client: _client,
           ),
         ),
-        // F-extend / W9 — notification feed
+
+        // ── Settings ────────────────────────────────────────────────────────
         GoRoute(
-          path: '/notifications',
-          builder: (context, state) => NotificationsScreen(apiClient: _client),
+          path: '/settings',
+          builder: (context, state) => SettingsScreen(
+            serverStore: _serverStore,
+            tokenStore: _tokenStore,
+            onServerCleared: () => _client.baseUrl = '',
+          ),
         ),
-        // F-extend / W9 — preferences + ntfy device registration
         GoRoute(
           path: '/settings/notifications',
           builder: (context, state) => NotificationsSettingsScreen(
@@ -126,12 +149,16 @@ class _SynapseAppState extends State<SynapseApp> {
             notificationService: _notifications,
           ),
         ),
-        // F-extend / W4 — Astrocyte memory search
+
+        // ── Other features ──────────────────────────────────────────────────
+        GoRoute(
+          path: '/notifications',
+          builder: (context, state) => NotificationsScreen(apiClient: _client),
+        ),
         GoRoute(
           path: '/memory',
           builder: (context, state) => MemoryScreen(apiClient: _client),
         ),
-        // F-extend / W7 — analytics overview
         GoRoute(
           path: '/analytics',
           builder: (context, state) => AnalyticsScreen(apiClient: _client),

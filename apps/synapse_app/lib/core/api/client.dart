@@ -15,7 +15,8 @@ class ApiException implements Exception {
 }
 
 class SynapseApiClient {
-  final String baseUrl;
+  // Non-final: updated when the user switches server without a full app restart.
+  String baseUrl;
   final TokenStore tokenStore;
   final http.Client _httpClient;
 
