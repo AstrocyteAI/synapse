@@ -120,22 +120,61 @@ jobs:
       - name: Enable desktop target
         run: flutter config --enable-${{ matrix.target }}-desktop
 
-      - name: Build
+      - name: Build (macOS / Windows)
+        # Linux skips this step — flutter_distributor builds + packages
+        # in one go to produce the AppImage. Calling flutter build first
+        # would duplicate work.
+        if: matrix.os != 'ubuntu-latest'
         working-directory: apps/synapse_app
         run: ${{ matrix.build-cmd }}
 
-      - name: Package (macOS / Linux)
-        if: matrix.os != 'windows-latest'
+      # ---------------------------------------------------------------------
+      # Linux — AppImage via flutter_distributor (single-file binary that
+      # bundles GTK, webkit2gtk, glib, etc. so end users don't need any
+      # apt install before running). See apps/synapse_app/distribute_options.yaml.
+      # ---------------------------------------------------------------------
+      - name: Install AppImage tooling
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          # libfuse2 is needed at runtime by AppImage to mount the bundle;
+          # desktop-file-utils provides validate-desktop-file used by
+          # appimagetool to sanity-check the .desktop entry.
+          sudo apt-get install -y --no-install-recommends \
+            libfuse2 desktop-file-utils
+          dart pub global activate flutter_distributor
+
+      - name: Build AppImage
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/synapse_app
+        run: |
+          flutter_distributor release \
+            --name=production \
+            --jobs=release-linux-appimage
+
+      - name: Locate AppImage and stage for release
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: apps/synapse_app
+        run: |
+          set -euo pipefail
+          TAG=${{ github.ref_name }}
+          # flutter_distributor drops outputs under dist/<version>/<name>/
+          APPIMAGE=$(find dist -name '*.AppImage' -type f | head -1)
+          if [ -z "${APPIMAGE}" ]; then
+            echo "::error::No .AppImage produced — check flutter_distributor output above"
+            ls -la dist/ || true
+            exit 1
+          fi
+          mv "${APPIMAGE}" "synapse-linux-${TAG}.AppImage"
+          chmod +x "synapse-linux-${TAG}.AppImage"
+          echo "ASSET=apps/synapse_app/synapse-linux-${TAG}.AppImage" >> $GITHUB_ENV
+
+      - name: Package (macOS)
+        if: matrix.os == 'macos-latest'
         run: |
           TAG=${{ github.ref_name }}
           NAME="${{ matrix.asset-name }}-${TAG}"
-          if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            zip -r "${NAME}.zip" "${{ matrix.artifact-path }}"
-            echo "ASSET=${NAME}.zip" >> $GITHUB_ENV
-          else
-            tar -czf "${NAME}.tar.gz" -C "$(dirname ${{ matrix.artifact-path }})" "$(basename ${{ matrix.artifact-path }})"
-            echo "ASSET=${NAME}.tar.gz" >> $GITHUB_ENV
-          fi
+          zip -r "${NAME}.zip" "${{ matrix.artifact-path }}"
+          echo "ASSET=${NAME}.zip" >> $GITHUB_ENV
 
       - name: Package (Windows)
         if: matrix.os == 'windows-latest'

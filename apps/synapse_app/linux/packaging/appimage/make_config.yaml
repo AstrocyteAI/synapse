@@ -1,0 +1,9 @@
+# flutter_distributor — AppImage make_config.
+#
+# Tells linuxdeploy + appimagetool which icon and .desktop file to use,
+# and how to name the resulting binary. Library bundling (webkit2gtk,
+# gtk, gstreamer) is handled automatically by linuxdeploy walking the
+# binary's ld-trace; we don't have to enumerate libraries here.
+
+display_name: Synapse
+icon: synapse.png

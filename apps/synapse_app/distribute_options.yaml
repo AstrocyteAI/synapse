@@ -1,0 +1,39 @@
+# flutter_distributor configuration — Synapse desktop release pipeline.
+#
+# https://github.com/leanflutter/flutter_distributor
+#
+# Currently configured for Linux AppImage. macOS .dmg and Windows .exe
+# are sketched below, commented out — uncomment when ready to migrate
+# off the current zip/tar release approach for those platforms.
+#
+# Local build:
+#   dart pub global activate flutter_distributor
+#   flutter_distributor release --name=production --jobs=release-linux-appimage
+#
+# Output lands at: dist/<version>/<asset>
+
+output: dist/
+
+releases:
+  - name: production
+    jobs:
+      # -----------------------------------------------------------------
+      # Linux — AppImage (single-file binary, bundles system deps)
+      # -----------------------------------------------------------------
+      - name: release-linux-appimage
+        package_platform: linux
+        package_target: appimage
+
+      # -----------------------------------------------------------------
+      # macOS — .dmg (uncomment when migrating off the current zip flow)
+      # -----------------------------------------------------------------
+      # - name: release-macos-dmg
+      #   package_platform: macos
+      #   package_target: dmg
+
+      # -----------------------------------------------------------------
+      # Windows — NSIS installer (uncomment when migrating off zip)
+      # -----------------------------------------------------------------
+      # - name: release-windows-exe
+      #   package_platform: windows
+      #   package_target: exe
