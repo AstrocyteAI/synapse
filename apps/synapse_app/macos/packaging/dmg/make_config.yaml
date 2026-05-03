@@ -1,9 +1,29 @@
 # flutter_distributor — macOS .dmg make_config.
 #
-# flutter_distributor invokes `appdmg` (Node.js) under the hood to
-# build the DMG. The .app bundle from `flutter build macos --release`
-# is dragged to /Applications via the standard "drag-to-install"
-# layout. No background image / volume icon configured yet — defaults
-# work fine for v0.1; polish for v0.2 if marketing demands it.
+# Schema: packages/flutter_app_packager/lib/src/makers/dmg/make_dmg_config.dart
+#
+# Required: title, contents (the appdmg layout — list of items with
+# {x, y, type, path}). Optional: icon, background, window size, etc.
+#
+# The standard "drag-to-install" UX puts the .app on the left side of
+# the mounted DMG window and a shortcut to /Applications on the right.
+# Users drag the app onto the shortcut to install. This is what we
+# configure below.
 
-display_name: Synapse
+title: Synapse
+
+contents:
+  # The .app bundle (drag source). Path is relative to the cwd where
+  # flutter_distributor runs (apps/synapse_app/), and points at the
+  # Flutter release bundle output.
+  - x: 110
+    y: 150
+    type: file
+    path: build/macos/Build/Products/Release/synapse_app.app
+
+  # /Applications shortcut (drag target). type=link tells appdmg to
+  # create a symlink in the DMG.
+  - x: 380
+    y: 150
+    type: link
+    path: /Applications

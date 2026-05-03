@@ -125,7 +125,9 @@ jobs:
 
       - name: Platform setup (Windows)
         if: matrix.os == 'windows-latest'
-        run: choco install -y nsis
+        # flutter_app_packager's EXE maker uses Inno Setup (NOT NSIS, despite
+        # what some flutter_distributor docs suggest). The compiler is iscc.exe.
+        run: choco install -y innosetup
 
       # ---------------------------------------------------------------------
       # Common build pipeline — all three platforms via flutter_distributor.

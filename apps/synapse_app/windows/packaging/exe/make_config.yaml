@@ -1,12 +1,27 @@
-# flutter_distributor — Windows NSIS installer make_config.
+# flutter_distributor — Windows installer make_config.
 #
-# Produces an .exe installer that:
-#   • Installs Synapse to %ProgramFiles%\Synapse (per-machine) by default
-#   • Adds a Start menu shortcut
-#   • Registers an Uninstall entry in Add/Remove Programs
+# Schema: packages/flutter_app_packager/lib/src/makers/exe/make_exe_config.dart
 #
-# Uses NSIS underneath. The Windows runner installs NSIS via Chocolatey
-# in the release workflow.
+# IMPORTANT: despite the package_target being "exe", flutter_app_packager's
+# EXE maker actually wraps Inno Setup (not NSIS — the README's "NSIS"
+# reference is stale). The Windows runner needs Inno Setup installed via
+# `choco install -y innosetup` (the workflow currently installs `nsis`
+# which won't be found by the maker — fix that next).
+#
+# Required: app_id (must be stable across versions; changing it breaks
+# the Add/Remove Programs upgrade path). Conventionally a UUID in braces.
+# Generate once, never change. The value below was generated with `uuidgen`
+# on 2026-05-03 and is dedicated to Synapse desktop.
+
+app_id: "{2D2A18AA-4D5E-4841-B2C6-CD2CA4039FA7}"
 
 display_name: Synapse
-publisher: Odeon Consulting Group
+publisher_name: Odeon Consulting Group
+publisher_url: https://odeoncg.ai
+
+# Optional: where Synapse installs by default. Inno Setup interprets
+# {autopf64} as %ProgramFiles% on 64-bit systems.
+install_dir_name: Synapse
+
+# Optional: create a desktop shortcut at install time (default false).
+create_desktop_icon: true
