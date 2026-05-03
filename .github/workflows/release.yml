@@ -129,8 +129,13 @@ jobs:
             libgtk-3-dev liblzma-dev libstdc++-12-dev \
             libwebkit2gtk-4.1-dev \
             libfuse2 desktop-file-utils
+          # appimagetool moved out of the AppImageKit umbrella repo into
+          # its own project at AppImage/appimagetool — the old release-13
+          # asset path is a 404. Pinning to 1.9.0 (latest tagged release
+          # as of 2026-04) for reproducibility; do NOT use the
+          # `continuous` tag — it rolls and silently changes behaviour.
           sudo wget -qO /usr/local/bin/appimagetool \
-            https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+            https://github.com/AppImage/appimagetool/releases/download/1.9.0/appimagetool-x86_64.AppImage
           sudo chmod +x /usr/local/bin/appimagetool
           appimagetool --version
 
