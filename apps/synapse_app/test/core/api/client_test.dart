@@ -79,6 +79,133 @@ void main() {
     });
   });
 
+  // ── Cerebro envelope unwrapping ──────────────────────────────────────────
+
+  group('SynapseApiClient isCerebro — list unwrapping', () {
+    test('listCouncils unwraps {"data": [...]} envelope', () async {
+      final client = makeClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': [
+              {
+                'session_id': 'cerebro-1',
+                'question': 'Cerebro council?',
+                'status': 'pending',
+                'council_type': 'llm',
+                'created_at': '2026-04-01T10:00:00Z',
+                'conflict_detected': false,
+              }
+            ]
+          }),
+          200,
+        );
+      });
+      client.isCerebro = true;
+
+      final councils = await client.listCouncils();
+      expect(councils.length, 1);
+      expect(councils[0].sessionId, 'cerebro-1');
+    });
+
+    test('listCouncils still works with bare Synapse array', () async {
+      final client = makeClient((request) async {
+        return http.Response(
+          jsonEncode([
+            {
+              'session_id': 'synapse-1',
+              'question': 'Synapse council?',
+              'status': 'pending',
+              'council_type': 'llm',
+              'created_at': '2026-04-01T10:00:00Z',
+              'conflict_detected': false,
+            }
+          ]),
+          200,
+        );
+      });
+      // isCerebro defaults to false — bare array must still parse
+
+      final councils = await client.listCouncils();
+      expect(councils.length, 1);
+      expect(councils[0].sessionId, 'synapse-1');
+    });
+  });
+
+  group('SynapseApiClient isCerebro — object unwrapping', () {
+    test('getCouncil unwraps {"data": {...}} envelope', () async {
+      final client = makeClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'session_id': 'cerebro-2',
+              'question': 'Wrapped council?',
+              'status': 'closed',
+              'council_type': 'llm',
+              'created_at': '2026-04-01T10:00:00Z',
+              'conflict_detected': false,
+              'dissent_detected': false,
+              'contributions_received': 3,
+              'members': [],
+            }
+          }),
+          200,
+        );
+      });
+      client.isCerebro = true;
+
+      final council = await client.getCouncil('cerebro-2');
+      expect(council.sessionId, 'cerebro-2');
+      expect(council.status, 'closed');
+    });
+
+    test('createCouncil unwraps {"data": {...}} envelope', () async {
+      final client = makeClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'session_id': 'new-cerebro',
+              'thread_id': 'thread-cerebro',
+              'status': 'pending',
+            }
+          }),
+          201,
+        );
+      });
+      client.isCerebro = true;
+
+      final result = await client.createCouncil(question: 'New question?');
+      expect(result.sessionId, 'new-cerebro');
+      expect(result.threadId, 'thread-cerebro');
+    });
+  });
+
+  group('SynapseApiClient isCerebro — nested object unwrapping', () {
+    test('listDeviceTokens unwraps {"data": {"devices": [...]}}', () async {
+      final client = makeClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'data': {
+              'devices': [
+                {
+                  'id': 'dev-1',
+                  'token_type': 'ntfy',
+                  'token': 'abc123',
+                  'created_at': '2026-04-01T10:00:00Z',
+                }
+              ]
+            }
+          }),
+          200,
+        );
+      });
+      client.isCerebro = true;
+
+      final tokens = await client.listDeviceTokens();
+      expect(tokens.length, 1);
+      expect(tokens[0].id, 'dev-1');
+    });
+  });
+
   group('SynapseApiClient error handling', () {
     test('throws ApiException on 401', () async {
       final client = makeClient((request) async {
