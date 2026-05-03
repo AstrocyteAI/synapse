@@ -312,22 +312,35 @@ class BackendInfo {
   /// "synapse" or "cerebro"
   final String backend;
   final String version;
+  /// "jwt_hs256" | "jwt_oidc" | "local"
+  final String authMode;
   final bool multiTenant;
   final bool billing;
+  /// OIDC issuer URL (present when authMode == "jwt_oidc")
+  final String? oidcIssuer;
+  /// OIDC client ID (present when authMode == "jwt_oidc")
+  final String? oidcClientId;
 
   const BackendInfo({
     required this.backend,
     required this.version,
+    required this.authMode,
     required this.multiTenant,
     required this.billing,
+    this.oidcIssuer,
+    this.oidcClientId,
   });
 
   factory BackendInfo.fromJson(Map<String, dynamic> json) {
+    final oidc = json['oidc'] as Map<String, dynamic>?;
     return BackendInfo(
       backend: json['backend'] as String,
       version: (json['version'] as String?) ?? '',
+      authMode: (json['auth_mode'] as String?) ?? 'jwt_hs256',
       multiTenant: (json['multi_tenant'] as bool?) ?? false,
       billing: (json['billing'] as bool?) ?? false,
+      oidcIssuer: oidc?['issuer'] as String?,
+      oidcClientId: oidc?['client_id'] as String?,
     );
   }
 }

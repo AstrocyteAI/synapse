@@ -79,13 +79,18 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       final body =
           isCerebro ? raw['data'] as Map<String, dynamic> : raw;
 
+      final oidc = body['oidc'] as Map<String, dynamic>?;
+
       setState(() {
         _preview = _BackendPreview(
           url: url,
           name: (body['name'] as String?) ?? 'Synapse',
           version: (body['version'] as String?) ?? '',
+          authMode: (body['auth_mode'] as String?) ?? 'jwt_hs256',
           multiTenant: (body['multi_tenant'] as bool?) ?? false,
           isCerebro: isCerebro,
+          oidcIssuer: oidc?['issuer'] as String?,
+          oidcClientId: oidc?['client_id'] as String?,
         );
         _checking = false;
       });
@@ -109,6 +114,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
     await widget.serverStore.setUrl(preview.url);
     await widget.serverStore.setIsCerebro(preview.isCerebro);
+    await widget.serverStore.setAuthMode(preview.authMode);
+    await widget.serverStore.setOidcIssuer(preview.oidcIssuer);
+    await widget.serverStore.setOidcClientId(preview.oidcClientId);
     widget.onServerConfigured(preview.url, preview.isCerebro);
 
     if (mounted) context.go('/login');
@@ -212,15 +220,21 @@ class _BackendPreview {
   final String url;
   final String name;
   final String version;
+  final String authMode;
   final bool multiTenant;
   final bool isCerebro;
+  final String? oidcIssuer;
+  final String? oidcClientId;
 
   const _BackendPreview({
     required this.url,
     required this.name,
     required this.version,
+    required this.authMode,
     required this.multiTenant,
     required this.isCerebro,
+    this.oidcIssuer,
+    this.oidcClientId,
   });
 }
 

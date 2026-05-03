@@ -21,6 +21,8 @@ dependencies:
   flutter_local_notifications: ^17.2.2
   # F3 — random ntfy topic generation
   uuid: ^4.0.0
+  # OIDC login via Casdoor (Cerebro jwt_oidc mode)
+  casdoor_flutter_sdk: ^1.1.0
 
 dev_dependencies:
   flutter_test:

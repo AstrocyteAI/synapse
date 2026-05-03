@@ -9,6 +9,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ServerStore {
   static const _urlKey = 'synapse_server_url';
   static const _isCerebroKey = 'synapse_is_cerebro';
+  static const _authModeKey = 'synapse_auth_mode';
+  static const _oidcIssuerKey = 'synapse_oidc_issuer';
+  static const _oidcClientIdKey = 'synapse_oidc_client_id';
 
   Future<String?> getUrl() async {
     final prefs = await SharedPreferences.getInstance();
@@ -34,11 +37,55 @@ class ServerStore {
     await prefs.setBool(_isCerebroKey, value);
   }
 
-  /// Clears the server URL and the backend-type flag together.
+  /// Auth mode reported by the backend: "jwt_hs256" | "jwt_oidc" | "local".
+  Future<String> getAuthMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_authModeKey) ?? 'jwt_hs256';
+  }
+
+  Future<void> setAuthMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_authModeKey, mode);
+  }
+
+  /// OIDC issuer URL — the Casdoor base URL for jwt_oidc mode.
+  Future<String?> getOidcIssuer() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_oidcIssuerKey);
+  }
+
+  Future<void> setOidcIssuer(String? issuer) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (issuer != null) {
+      await prefs.setString(_oidcIssuerKey, issuer);
+    } else {
+      await prefs.remove(_oidcIssuerKey);
+    }
+  }
+
+  /// OIDC client ID — the Casdoor application client ID for jwt_oidc mode.
+  Future<String?> getOidcClientId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_oidcClientIdKey);
+  }
+
+  Future<void> setOidcClientId(String? clientId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (clientId != null) {
+      await prefs.setString(_oidcClientIdKey, clientId);
+    } else {
+      await prefs.remove(_oidcClientIdKey);
+    }
+  }
+
+  /// Clears all stored server state.
   Future<void> clear() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_urlKey);
     await prefs.remove(_isCerebroKey);
+    await prefs.remove(_authModeKey);
+    await prefs.remove(_oidcIssuerKey);
+    await prefs.remove(_oidcClientIdKey);
   }
 
   /// Strips trailing slash so all URL construction is consistent.
