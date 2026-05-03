@@ -18,8 +18,11 @@ icon: linux/packaging/appimage/synapse.png
 startup_notify: true
 
 categories:
+  # Per the freedesktop.org Menu Spec, Categories must come from the
+  # registered list (https://specifications.freedesktop.org/menu-spec/
+  # latest/category-registry.html) — Office, Network, Utility, etc.
+  # Custom values need an X- prefix. "Productivity" is not registered.
   - Office
-  - Productivity
 
 keywords:
   - AI
