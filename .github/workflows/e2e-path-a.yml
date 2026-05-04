@@ -1,0 +1,119 @@
+name: E2E Path A (OSS self-hosted)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/backend/**"
+      - "e2e/**"
+      - ".github/workflows/e2e-path-a.yml"
+  pull_request:
+    paths:
+      - "apps/backend/**"
+      - "e2e/**"
+      - ".github/workflows/e2e-path-a.yml"
+  # Triggered by astrocyte release workflow so a new gateway image is verified
+  # against the latest synapse-backend before downstream consumers (cerebro)
+  # bump it.
+  repository_dispatch:
+    types: [astrocyte-release]
+  workflow_dispatch:
+    inputs:
+      astrocyte_image_tag:
+        description: "Override astrocyte gateway tag (default: latest released)"
+        required: false
+      astrocyte_postgres_tag:
+        description: "Override astrocyte-postgres tag (default: latest released)"
+        required: false
+
+jobs:
+  e2e:
+    name: Path A — Synapse + Astrocyte
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          # GHCR_TOKEN: PAT with read:packages — needed while astrocyte
+          # images are private. Falls back to GITHUB_TOKEN once they're public.
+          password: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Resolve astrocyte image tags
+        id: tags
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_TOKEN || secrets.GITHUB_TOKEN }}
+          OVERRIDE_GATEWAY: ${{ inputs.astrocyte_image_tag }}
+          OVERRIDE_POSTGRES: ${{ inputs.astrocyte_postgres_tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${OVERRIDE_GATEWAY:-}" ]; then
+            ASTROCYTE_TAG="$OVERRIDE_GATEWAY"
+          else
+            ASTROCYTE_TAG=$(gh api /orgs/AstrocyteAI/packages/container/astrocyte%2Fastrocyte-gateway-py/versions \
+              --jq '[.[] | .metadata.container.tags[] | select(test("^v[0-9]"))] | sort | last')
+          fi
+          if [ -n "${OVERRIDE_POSTGRES:-}" ]; then
+            ASTROCYTE_POSTGRES_TAG="$OVERRIDE_POSTGRES"
+          else
+            ASTROCYTE_POSTGRES_TAG=$(gh api /orgs/AstrocyteAI/packages/container/astrocyte%2Fastrocyte-postgres/versions \
+              --jq '[.[] | .metadata.container.tags[] | select(test("^v[0-9]"))] | sort | last')
+          fi
+          echo "astrocyte=$ASTROCYTE_TAG" >> "$GITHUB_OUTPUT"
+          echo "astrocyte_postgres=$ASTROCYTE_POSTGRES_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved astrocyte=$ASTROCYTE_TAG astrocyte-postgres=$ASTROCYTE_POSTGRES_TAG"
+
+      - name: Build E2E images
+        env:
+          ASTROCYTE_IMAGE_TAG: ${{ steps.tags.outputs.astrocyte }}
+          ASTROCYTE_POSTGRES_TAG: ${{ steps.tags.outputs.astrocyte_postgres }}
+        run: docker compose -f e2e/docker-compose.path-a.yml build
+
+      - name: Start E2E stack
+        env:
+          ASTROCYTE_IMAGE_TAG: ${{ steps.tags.outputs.astrocyte }}
+          ASTROCYTE_POSTGRES_TAG: ${{ steps.tags.outputs.astrocyte_postgres }}
+        run: docker compose -f e2e/docker-compose.path-a.yml up -d --wait --timeout 120
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r e2e/requirements.txt
+
+      - name: Run E2E tests
+        env:
+          BACKEND_URL: http://localhost:8000
+          ASTROCYTE_GATEWAY_URL: http://localhost:8080
+          ASTROCYTE_TOKEN: e2e-astrocyte-api-key
+          WEBHOOK_SINK_URL: http://localhost:9999
+          AUTH_MODE: hs256
+          SYNAPSE_JWT_SECRET: e2e-synapse-jwt-secret-for-testing-only
+          SYNAPSE_JWT_AUDIENCE: synapse
+          MULTI_TENANT: "false"
+        run: pytest e2e/ -v --tb=short
+
+      - name: Dump logs on failure
+        if: failure()
+        env:
+          ASTROCYTE_IMAGE_TAG: ${{ steps.tags.outputs.astrocyte }}
+          ASTROCYTE_POSTGRES_TAG: ${{ steps.tags.outputs.astrocyte_postgres }}
+        run: docker compose -f e2e/docker-compose.path-a.yml logs --no-color
+
+      - name: Tear down
+        if: always()
+        env:
+          ASTROCYTE_IMAGE_TAG: ${{ steps.tags.outputs.astrocyte }}
+          ASTROCYTE_POSTGRES_TAG: ${{ steps.tags.outputs.astrocyte_postgres }}
+        run: docker compose -f e2e/docker-compose.path-a.yml down --remove-orphans -v

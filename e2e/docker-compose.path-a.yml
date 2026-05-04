@@ -1,0 +1,132 @@
+# Path A — OSS self-hosted E2E stack: Synapse + Astrocyte gateway.
+#
+# Usage (run from repo root):
+#
+#   ASTROCYTE_IMAGE_TAG=v1.2.3 ASTROCYTE_POSTGRES_TAG=v1.2.3 \
+#     docker compose -f e2e/docker-compose.path-a.yml up --wait
+#
+# Tags are resolved dynamically in CI via the GitHub Releases API.
+# All volumes are anonymous so `down -v` gives a clean slate.
+
+name: synapse-e2e-path-a
+
+services:
+  synapse-backend:
+    build:
+      context: ../apps/backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://synapse:synapse@synapse-postgres:5432/synapse
+      ASTROCYTE_GATEWAY_URL: http://astrocyte-gateway:8080
+      ASTROCYTE_TOKEN: e2e-astrocyte-api-key
+      CENTRIFUGO_API_URL: http://centrifugo:8002
+      CENTRIFUGO_API_KEY: e2e-centrifugo-api-key
+      CENTRIFUGO_TOKEN_SECRET: e2e-centrifugo-token-secret
+      SYNAPSE_AUTH_MODE: jwt_hs256
+      SYNAPSE_JWT_SECRET: e2e-synapse-jwt-secret-for-testing-only
+      SYNAPSE_JWT_AUDIENCE: synapse
+      SYNAPSE_LLM_PROVIDER: mock
+    depends_on:
+      synapse-postgres:
+        condition: service_healthy
+      astrocyte-gateway:
+        condition: service_healthy
+      centrifugo:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8000/health\", timeout=2)'",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  centrifugo:
+    image: centrifugo/centrifugo:v5
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+    environment:
+      CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: e2e-centrifugo-token-secret
+      CENTRIFUGO_API_KEY: e2e-centrifugo-api-key
+    volumes:
+      - ../apps/backend/centrifugo.yaml:/centrifugo/config.yaml:ro
+    command: centrifugo --config=/centrifugo/config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  synapse-postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_DB: synapse
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  astrocyte-gateway:
+    image: ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py:${ASTROCYTE_IMAGE_TAG:-latest}
+    ports:
+      - "8080:8080"
+    environment:
+      ASTROCYTE_HOST: 0.0.0.0
+      ASTROCYTE_PORT: "8080"
+      ASTROCYTE_AUTH_MODE: api_key
+      ASTROCYTE_API_KEY: e2e-astrocyte-api-key
+      ASTROCYTE_VECTOR_STORE: pgvector
+      ASTROCYTE_PG_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      ASTROCYTE_GRAPH_STORE: age
+      ASTROCYTE_AGE_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      ASTROCYTE_CONFIG_PATH: /config/astrocyte.yaml
+    volumes:
+      - ../apps/backend/astrocyte.yaml:/config/astrocyte.yaml:ro
+      - ../apps/backend/mip.yaml:/config/mip.yaml:ro
+    depends_on:
+      astrocyte-postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8080/live\", timeout=2)'",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  astrocyte-postgres:
+    image: ghcr.io/astrocyteai/astrocyte/astrocyte-postgres:${ASTROCYTE_POSTGRES_TAG:-latest}
+    environment:
+      POSTGRES_USER: astrocyte
+      POSTGRES_PASSWORD: astrocyte
+      POSTGRES_DB: astrocyte
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U astrocyte -d astrocyte"]
+      interval: 3s
+      timeout: 5s
+      retries: 10
+
+  webhook-sink:
+    build:
+      context: webhook_sink
+    ports:
+      - "9999:9999"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:9999/health\", timeout=2)'",
+        ]
+      interval: 3s
+      timeout: 3s
+      retries: 10
