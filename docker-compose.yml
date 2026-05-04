@@ -96,7 +96,12 @@ services:
       ASTROCYTE_PORT: 8080
       ASTROCYTE_AUTH_MODE: api_key
       ASTROCYTE_API_KEY: ${ASTROCYTE_TOKEN:-dev-astrocyte-api-key}
-      ASTROCYTE_VECTOR_STORE: pgvector
+      # Entry-point name registered by adapters-storage-py/astrocyte-postgres
+      # is "postgres" — the historical "pgvector" name was renamed upstream
+      # without a backwards-compat alias, so the stale value caused
+      # `astrocyte.errors.ConfigError: Vector store 'pgvector' not found` at
+      # gateway boot.
+      ASTROCYTE_VECTOR_STORE: postgres
       ASTROCYTE_PG_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
       ASTROCYTE_GRAPH_STORE: age
       ASTROCYTE_AGE_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
