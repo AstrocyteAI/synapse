@@ -6,22 +6,27 @@ This document defines the three chat modes in Synapse, their interaction models,
 
 ## 1. Overview
 
-Synapse supports three distinct chat interaction modes. They are not mutually exclusive — a single UI session can move between all three:
+Synapse supports four distinct chat interaction modes. The first three are
+council-bound; the fourth is free-standing. They are not mutually exclusive —
+a single UI session can move between all four:
 
 | Mode | When | What happens |
 |------|------|--------------|
 | **Chat to start** | No active council | User's message triggers a new council; the council deliberates autonomously |
 | **Chat during** | Council in progress | User joins as a participant; contributes context or redirects a stage in real time |
 | **Chat with verdict** | Council closed | User asks follow-up questions; Astrocyte `reflect()` synthesises answers from retained council memory |
+| **Chat with tools** | Council-independent | Free-standing multi-turn chat with tool calling (LibreChat-style). See §4a. |
 
 ```
 [User types a message]
          │
-         ├── no active council  ──→  Mode 1: start a council
+         ├── no active council    ──→  Mode 1: start a council
          │
-         ├── council in progress ──→  Mode 2: join as participant
+         ├── council in progress  ──→  Mode 2: join as participant
          │
-         └── council closed ──────→  Mode 3: reflect on verdict
+         ├── council closed       ──→  Mode 3: reflect on verdict
+         │
+         └── free-standing chat   ──→  Mode 4: chat-with-tools loop
 ```
 
 ---
@@ -142,6 +147,60 @@ Handler:
 3. Optionally calls `AstrocyteClient.recall(query=message, bank_id="precedents")` to surface related past decisions
 
 This is stateless per request — no conversation history is maintained server-side beyond what is already in Astrocyte memory. The chat thread history is managed client-side.
+
+---
+
+## 4a. Mode 4 — Chat with tools (free-standing)
+
+Mode 4 is the council-independent surface. Backed by `POST /v1/chat/sessions`
+and `POST /v1/chat/sessions/:id/messages`. The agent loop is built on
+**Pydantic AI v1** (multi-provider, native streaming, MCP client + server)
+and exposes three council-flavoured built-ins:
+
+| Tool | Purpose |
+|---|---|
+| `synapse_council_recall_precedent` | Query Astrocyte's `precedents` bank for prior council verdicts. |
+| `synapse_recall` | Generic recall against any named Astrocyte bank. |
+| `synapse_council_start` | Convene a new council from the user's question; hand off the new council ID. |
+
+Tools whose names start with `mcp:` route to the MCP client
+(`synapse.chat.mcp`). Format: `mcp:<server>.<tool>`, where `<server>` is a
+key in `SYNAPSE_MCP_SERVERS` (JSON env var).
+
+The wire format (SSE event types, ordering, error semantics) is identical
+across Synapse OSS and Cerebro EE so SDK clients can target either with no
+per-backend code. For the full reference, see the OpenAPI contract
+`apps/backend/priv/contracts/chat-api-v1.openapi.json` and the
+chat-with-tools design doc in the Cerebro repo
+(`docs/_design/chat-with-tools.md`).
+
+**User experience:**
+```
+You:     Show me past decisions on event sourcing, then start a council.
+
+Synapse: [tool synapse_council_recall_precedent: { query: "event sourcing" }]
+         [tool result: 3 prior councils matched]
+         Here are the 3 prior precedents:
+         1. order-service event sourcing (May 2025, verdict: adopt)
+         2. ledger-service event sourcing (Jan 2026, verdict: defer)
+         3. inventory event sourcing (Mar 2026, verdict: adopt)
+
+         [tool synapse_council_start: { question: "Should we adopt event…" }]
+         [tool result: { council_id: "abc-123" }]
+         Started council abc-123 — track it at /councils/abc-123.
+```
+
+**Backend:** `POST /v1/chat/sessions` (`synapse/routers/chat.py`) +
+`synapse/chat/agent.py` agent loop. Streams `session_started → token (×N)
+[→ tool_call → tool_result]* → message_complete` over SSE. The full event
+sequence is also persisted as `thread_events` rows so the conversation
+replays from one query.
+
+**When to use Mode 4 vs Mode 1:** if the user wants the council
+deliberation primitive (multiple LLM voices, peer review, synthesised
+verdict), use Mode 1. If they want a fast tool-augmented assistant turn,
+use Mode 4 — and let the `synapse_council_start` tool escalate to Mode 1
+when the assistant decides the question warrants a real council.
 
 ---
 
