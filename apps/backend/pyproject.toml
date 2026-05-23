@@ -23,8 +23,11 @@ dependencies = [
     # Auth — JWT (RS256 OIDC + HS256 dev mode) + local email/password
     "pyjwt[crypto]>=2.8",
     "bcrypt>=4.0",
-    # LLM
-    "litellm>=1.52",
+    # LLM — Pydantic AI (v1+ stable since Sep 2025) gives us typed-output
+    # validation, native multi-provider routing across 10+ providers, MCP
+    # client + server support, and Logfire-compatible OTel tracing. Replaces
+    # the earlier LiteLLM-only client. See synapse/llm/client.py.
+    "pydantic-ai>=1.0",
     # SSE streaming
     "sse-starlette>=2.1",
     # MCP server (agent-to-agent access)

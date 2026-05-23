@@ -23,6 +23,7 @@ from synapse.routers import (
     audit_logs,
     auth,
     centrifugo_router,
+    chat,
     contributions,
     councils,
     dsar,
@@ -128,6 +129,7 @@ def create_app() -> FastAPI:
     app.include_router(councils.router, prefix="/v1")
     app.include_router(contributions.router, prefix="/v1")
     app.include_router(threads.router, prefix="/v1")
+    app.include_router(chat.router, prefix="/v1")
     app.include_router(centrifugo_router.router, prefix="/v1")
     app.include_router(templates.router, prefix="/v1")
     app.include_router(memory.router, prefix="/v1")

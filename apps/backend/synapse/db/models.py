@@ -139,6 +139,7 @@ class CouncilTranscript(Base):
 
 
 class ThreadEventType(StrEnum):
+    # v1 taxonomy (April 2026 baseline) — council pipeline + chat reflection.
     user_message = "user_message"
     council_started = "council_started"
     stage_progress = "stage_progress"
@@ -151,6 +152,15 @@ class ThreadEventType(StrEnum):
     member_summoned = "member_summoned"
     system_event = "system_event"
     conflict_detected = "conflict_detected"
+
+    # v2 additions (chat-with-tools surface). Matches
+    # priv/contracts/thread-events-v2.schema.json — both backends agree on
+    # this enum string set; migration bundle imports round-trip.
+    #
+    # Edit / regen / fork events ship in a later commit; the agent loop
+    # commit only needs tool_call + tool_result.
+    tool_call = "tool_call"
+    tool_result = "tool_result"
 
 
 class Thread(Base):
@@ -223,6 +233,80 @@ class ThreadEvent(Base):
     )
 
     thread: Mapped[Thread] = relationship("Thread", back_populates="events")
+
+
+# ---------------------------------------------------------------------------
+# Chat sessions — metadata wrapper over threads for the chat-with-tools surface
+#
+# A ChatSession is a thin layer above an existing Thread. The Thread continues
+# to be the source of truth for the event log (user messages, agent responses,
+# tool calls, tool results, regenerations, edits); ChatSession adds the
+# per-conversation metadata that determines *how* the agent should respond:
+# model, instructions, enabled tools, memory bank scoping, sandbox runtime
+# preference.
+#
+# Forks: a fork creates a new ChatSession with a new Thread, linked back to
+# the parent via parent_session_id + parent_fork_event_id. The parent
+# Thread gets a `conversation_forked` event referencing the new session.
+# Append-only semantics preserved — no event in the parent is mutated.
+#
+# Soft delete: status = "archived" rather than DELETE, so chat history
+# stays auditable and the underlying event log is preserved.
+# ---------------------------------------------------------------------------
+
+
+class ChatSession(Base):
+    """Chat-with-tools session — metadata wrapper over a Thread.
+
+    Mirrors ``priv/contracts/chat-api-v1.openapi.json`` (Cerebro side) which
+    both backends implement under Model A parity.
+    """
+
+    __tablename__ = "chat_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    thread_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("threads.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+
+    tenant_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_by: Mapped[str] = mapped_column(String(256), nullable=False)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # "active" | "archived". Soft-delete via status; no DELETE.
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
+
+    # Optional link for Mode 3 chat — chat with a closed council verdict.
+    council_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("council_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Agent configuration: model, instructions, tools, memory_banks,
+    # sandbox_runtime_preference. Shape defined in chat-api-v1's AgentConfig.
+    agent_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    # Fork tracking. When this session was created via fork from another
+    # session, parent_session_id + parent_fork_event_id point at the cursor.
+    parent_session_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("chat_sessions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    parent_fork_event_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    thread: Mapped[Thread] = relationship("Thread", foreign_keys=[thread_id])
 
 
 # ---------------------------------------------------------------------------

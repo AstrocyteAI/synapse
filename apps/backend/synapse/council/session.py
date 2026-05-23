@@ -55,6 +55,46 @@ async def create_session(
     return session
 
 
+async def create_minimal_session(
+    db: AsyncSession,
+    *,
+    tenant_id: str | None,
+    created_by: str,
+    question: str,
+    title: str | None = None,
+) -> CouncilSession:
+    """Create a draft council from minimal inputs (used by the
+    ``synapse_council_start`` chat tool).
+
+    Skips template / member / chairman resolution — the caller (typically
+    an LLM with only the user's question) doesn't know that context. The
+    council lands in ``pending`` status with empty members/chairman; the
+    user can promote it from the UI.
+
+    Returns the persisted CouncilSession.
+    """
+    session = CouncilSession(
+        id=uuid.uuid4(),
+        question=question,
+        status=CouncilStatus.pending,
+        council_type="llm",
+        members=[],
+        chairman={},
+        config={"title": title} if title else {},
+        topic_tag=None,
+        template_id=None,
+        created_by=created_by,
+        tenant_id=tenant_id,
+        quorum=None,
+        contribution_deadline=None,
+        run_at=None,
+    )
+    db.add(session)
+    await db.commit()
+    await db.refresh(session)
+    return session
+
+
 async def add_contribution(
     db: AsyncSession,
     session_id: uuid.UUID,
