@@ -1,19 +1,44 @@
 #!/usr/bin/env bash
-# Pre-commit: ruff lint + format check for the Python backend.
+# Pre-commit: ruff lint + format check for the Python backend, plus
+# jq-canonical format check for the OpenAPI contract files.
 # Install once with: git config core.hooksPath .githooks
 
 set -euo pipefail
 
 BACKEND="apps/backend"
 
-# Only run if there are staged Python files in the backend.
-staged=$(git diff --cached --name-only --diff-filter=ACM | grep "^${BACKEND}/.*\.py$" || true)
-if [ -z "$staged" ]; then
-    exit 0
+# --- Python: ruff lint + format ------------------------------------------
+staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep "^${BACKEND}/.*\.py$" || true)
+if [ -n "$staged_py" ]; then
+    (
+        cd "$BACKEND"
+        echo "→ ruff check..."
+        uv run --with ruff ruff check synapse tests
+        echo "→ ruff format --check..."
+        uv run --with ruff ruff format --check synapse tests
+    )
 fi
 
-cd "$BACKEND"
-echo "→ ruff check..."
-uv run --with ruff ruff check synapse tests
-echo "→ ruff format --check..."
-uv run --with ruff ruff format --check synapse tests
+# --- Contracts: jq-canonical JSON ----------------------------------------
+# Canonical format is `jq . <file>` (2-space indent, every key its own
+# line, sorted-by-source-order). Locking this keeps git diff + git blame
+# meaningful on the cross-backend API contracts — see
+# https://github.com/AstrocyteAI/synapse for the design rationale.
+staged_contracts=$(git diff --cached --name-only --diff-filter=ACM \
+    | grep "^${BACKEND}/synapse/contracts/.*\.json$" || true)
+if [ -n "$staged_contracts" ]; then
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "✗ jq is required to check contract formatting. brew install jq." >&2
+        exit 1
+    fi
+    echo "→ jq-canonical contract check..."
+    fail=0
+    for f in $staged_contracts; do
+        if ! diff -q "$f" <(jq . "$f") > /dev/null 2>&1; then
+            echo "  ✗ $f is not jq-canonical." >&2
+            echo "    Fix: jq . $f > $f.tmp && mv $f.tmp $f" >&2
+            fail=1
+        fi
+    done
+    [ "$fail" -eq 0 ] || exit 1
+fi
