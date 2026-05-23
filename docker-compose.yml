@@ -103,8 +103,11 @@ services:
       # gateway boot.
       ASTROCYTE_VECTOR_STORE: postgres
       ASTROCYTE_PG_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
-      ASTROCYTE_GRAPH_STORE: age
-      ASTROCYTE_AGE_DSN: postgresql://astrocyte:astrocyte@astrocyte-postgres:5432/astrocyte
+      # Apache AGE was removed in Astrocyte v0.14.x (ADR-008): graph queries
+      # now use flat `section_links` + `unit_links` tables inside the regular
+      # postgres backend. Setting ASTROCYTE_GRAPH_STORE=age would crash boot
+      # with `Provider 'age' not found in entry point group
+      # 'astrocyte.graph_stores'`.
       ASTROCYTE_CONFIG_PATH: /config/astrocyte.yaml
     volumes:
       - ./apps/backend/astrocyte.yaml:/config/astrocyte.yaml:ro
