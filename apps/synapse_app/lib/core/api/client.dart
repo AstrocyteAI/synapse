@@ -363,4 +363,145 @@ class SynapseApiClient {
     final body = _unwrap(jsonDecode(response.body) as Map<String, dynamic>);
     return (body['data'] as List<dynamic>?) ?? [];
   }
+
+  // -------------------------------------------------------------------------
+  // Chat-with-tools (Mode 4) — free-standing chat sessions.
+  // -------------------------------------------------------------------------
+
+  Future<ChatSession> createChatSession({
+    String? title,
+    AgentConfig? agentConfig,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/chat/sessions');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (agentConfig != null) 'agent_config': agentConfig.toJson(),
+      }),
+    );
+    _checkResponse(response);
+    return ChatSession.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<ListChatSessionsResponse> listChatSessions({
+    String status = 'active',
+    int limit = 50,
+    String? before,
+  }) async {
+    final headers = await _authHeaders();
+    final qs = <String, String>{'status': status, 'limit': '$limit'};
+    if (before != null) qs['before'] = before;
+    final uri = Uri.parse(
+      '$baseUrl/v1/chat/sessions',
+    ).replace(queryParameters: qs);
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    // The list response is itself an envelope ({data, next_before_id}).
+    // Don't run it through _unwrap — under Cerebro that would strip the
+    // outer envelope and the inner one would look like the response.
+    return ListChatSessionsResponse.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<ChatSession> getChatSession(String id) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/chat/sessions/$id');
+    final response = await _httpClient.get(uri, headers: headers);
+    _checkResponse(response);
+    return ChatSession.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  Future<ChatSession> updateChatSession(
+    String id, {
+    String? title,
+    String? status,
+    AgentConfig? agentConfig,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/chat/sessions/$id');
+    final response = await _httpClient.patch(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (status != null) 'status': status,
+        if (agentConfig != null) 'agent_config': agentConfig.toJson(),
+      }),
+    );
+    _checkResponse(response);
+    return ChatSession.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  /// Soft-delete: flips status to "archived", returns 204.
+  Future<void> archiveChatSession(String id) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/chat/sessions/$id');
+    final response = await _httpClient.delete(uri, headers: headers);
+    _checkResponse(response);
+  }
+
+  /// POST /v1/chat/sessions/:id/messages — yields one [ChatSseEvent] per
+  /// server frame. The consumer dispatches on the runtime subtype (sealed
+  /// over the six event types defined in chat.md §4a).
+  ///
+  /// The stream ends when the server closes the connection. Callers should
+  /// treat the absence of a final [MessageCompleteEvent] as a failed turn —
+  /// status is locked to 200 by send_chunked/2 so the only honest failure
+  /// signal is an in-body [ChatErrorEvent] or a missing message_complete.
+  Stream<ChatSseEvent> streamChatMessage(
+    String sessionId,
+    String content,
+  ) async* {
+    final headers = await _authHeaders();
+    final req = http.Request(
+      'POST',
+      Uri.parse('$baseUrl/v1/chat/sessions/$sessionId/messages'),
+    )
+      ..headers.addAll(headers)
+      ..body = jsonEncode({'content': content});
+
+    final res = await _httpClient.send(req);
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      final body = await res.stream.bytesToString();
+      throw ApiException(res.statusCode, body);
+    }
+
+    var buffer = '';
+    // utf8.decoder is a StreamTransformer that handles multi-byte boundary
+    // splits across chunk reads safely.
+    await for (final chunk in res.stream.transform(utf8.decoder)) {
+      buffer += chunk;
+      while (true) {
+        final sep = buffer.indexOf('\n\n');
+        if (sep == -1) break;
+        final frame = buffer.substring(0, sep);
+        buffer = buffer.substring(sep + 2);
+        final payload = frame
+            .split('\n')
+            .where((l) => l.startsWith('data: '))
+            .map((l) => l.substring(6))
+            .join();
+        if (payload.isEmpty) continue;
+        try {
+          final json = jsonDecode(payload);
+          if (json is! Map<String, dynamic>) continue;
+          final evt = ChatSseEvent.fromJson(json);
+          if (evt != null) yield evt;
+        } catch (_) {
+          // Drop malformed frames silently — see chat.md §4a, the contract
+          // is that each `data:` line is a single JSON object.
+        }
+      }
+    }
+  }
 }

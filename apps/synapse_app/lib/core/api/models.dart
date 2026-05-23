@@ -372,3 +372,172 @@ class MemoryHit {
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Chat-with-tools (Mode 4) — free-standing chat sessions with tool calling.
+// See docs/_design/chat.md §4a. Wire contract:
+// priv/contracts/chat-api-v1.openapi.json.
+// ---------------------------------------------------------------------------
+
+class AgentConfig {
+  final String? model;
+  final List<String> tools;
+
+  const AgentConfig({this.model, this.tools = const []});
+
+  factory AgentConfig.fromJson(Map<String, dynamic> json) {
+    return AgentConfig(
+      model: json['model'] as String?,
+      tools: ((json['tools'] as List?) ?? const [])
+          .map((e) => e.toString())
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        if (model != null) 'model': model,
+        'tools': tools,
+      };
+}
+
+class ChatSession {
+  final String id;
+  final String threadId;
+  final String title;
+  final String status; // "active" | "archived"
+  final AgentConfig agentConfig;
+  final String createdAt;
+  final String updatedAt;
+
+  const ChatSession({
+    required this.id,
+    required this.threadId,
+    required this.title,
+    required this.status,
+    required this.agentConfig,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  bool get isArchived => status == 'archived';
+
+  factory ChatSession.fromJson(Map<String, dynamic> json) {
+    return ChatSession(
+      id: json['id'] as String,
+      threadId: json['thread_id'] as String,
+      title: (json['title'] as String?) ?? '',
+      status: (json['status'] as String?) ?? 'active',
+      agentConfig: AgentConfig.fromJson(
+        (json['agent_config'] as Map<String, dynamic>?) ?? const {},
+      ),
+      createdAt: json['created_at'] as String,
+      updatedAt: (json['updated_at'] as String?) ?? json['created_at'] as String,
+    );
+  }
+}
+
+class ListChatSessionsResponse {
+  final List<ChatSession> data;
+  final String? nextBeforeId;
+
+  const ListChatSessionsResponse({required this.data, this.nextBeforeId});
+
+  factory ListChatSessionsResponse.fromJson(Map<String, dynamic> json) {
+    return ListChatSessionsResponse(
+      data: ((json['data'] as List?) ?? const [])
+          .map((e) => ChatSession.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      nextBeforeId: json['next_before_id'] as String?,
+    );
+  }
+}
+
+/// Sealed hierarchy over the SSE event types defined in chat.md §4a.
+///
+/// Use `switch (event)` to dispatch — exhaustive over the six concrete
+/// subtypes. `fromJson` returns `null` for unknown / malformed payloads so
+/// the caller can skip them silently (matches the OpenAPI contract: the
+/// receiver MUST tolerate unknown event types for forward compatibility).
+sealed class ChatSseEvent {
+  const ChatSseEvent();
+
+  static ChatSseEvent? fromJson(Map<String, dynamic> json) {
+    final type = json['type'];
+    if (type is! String) return null;
+    return switch (type) {
+      'session_started' => SessionStartedEvent.fromJson(json),
+      'token' => TokenEvent.fromJson(json),
+      'tool_call' => ToolCallEvent.fromJson(json),
+      'tool_result' => ToolResultEvent.fromJson(json),
+      'message_complete' => MessageCompleteEvent.fromJson(json),
+      'error' => ChatErrorEvent.fromJson(json),
+      _ => null,
+    };
+  }
+}
+
+class SessionStartedEvent extends ChatSseEvent {
+  final String sessionId;
+  final String threadId;
+  const SessionStartedEvent({required this.sessionId, required this.threadId});
+  factory SessionStartedEvent.fromJson(Map<String, dynamic> j) =>
+      SessionStartedEvent(
+        sessionId: j['session_id'] as String,
+        threadId: j['thread_id'] as String,
+      );
+}
+
+class TokenEvent extends ChatSseEvent {
+  final String content;
+  const TokenEvent({required this.content});
+  factory TokenEvent.fromJson(Map<String, dynamic> j) =>
+      TokenEvent(content: (j['content'] as String?) ?? '');
+}
+
+class ToolCallEvent extends ChatSseEvent {
+  final String id;
+  final String name;
+  final Map<String, dynamic> arguments;
+  const ToolCallEvent({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+  factory ToolCallEvent.fromJson(Map<String, dynamic> j) => ToolCallEvent(
+        id: j['id'] as String,
+        name: j['name'] as String,
+        arguments: Map<String, dynamic>.from(
+          (j['arguments'] as Map<dynamic, dynamic>?) ?? const {},
+        ),
+      );
+}
+
+class ToolResultEvent extends ChatSseEvent {
+  final String toolCallId;
+  final Object? result;
+  final String? error;
+  const ToolResultEvent({
+    required this.toolCallId,
+    this.result,
+    this.error,
+  });
+  factory ToolResultEvent.fromJson(Map<String, dynamic> j) => ToolResultEvent(
+        toolCallId: j['tool_call_id'] as String,
+        result: j['result'],
+        error: j['error'] as String?,
+      );
+}
+
+class MessageCompleteEvent extends ChatSseEvent {
+  final String threadId;
+  const MessageCompleteEvent({required this.threadId});
+  factory MessageCompleteEvent.fromJson(Map<String, dynamic> j) =>
+      MessageCompleteEvent(threadId: j['thread_id'] as String);
+}
+
+class ChatErrorEvent extends ChatSseEvent {
+  final String message;
+  const ChatErrorEvent({required this.message});
+  factory ChatErrorEvent.fromJson(Map<String, dynamic> j) =>
+      ChatErrorEvent(message: (j['message'] as String?) ?? '');
+}

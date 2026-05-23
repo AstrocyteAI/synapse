@@ -10,6 +10,8 @@ import 'features/councils/council_list_screen.dart';
 import 'features/councils/council_detail_screen.dart';
 import 'features/councils/create_council_screen.dart';
 import 'features/chat/chat_screen.dart';
+import 'features/chat/chat_session_detail_screen.dart';
+import 'features/chat/chat_sessions_screen.dart';
 import 'features/chat/verdict_chat_screen.dart';
 import 'features/memory/memory_screen.dart';
 import 'features/notifications/notifications_screen.dart';
@@ -132,6 +134,19 @@ class _SynapseAppState extends State<SynapseApp> {
           builder: (context, state) => VerdictChatScreen(
             sessionId: state.pathParameters['id']!,
             client: _client,
+          ),
+        ),
+
+        // ── Chat-with-tools (Mode 4 — free-standing) ────────────────────────
+        GoRoute(
+          path: '/chat/sessions',
+          builder: (context, state) => ChatSessionsScreen(client: _client),
+        ),
+        GoRoute(
+          path: '/chat/sessions/:id',
+          builder: (context, state) => ChatSessionDetailScreen(
+            client: _client,
+            sessionId: state.pathParameters['id']!,
           ),
         ),
 

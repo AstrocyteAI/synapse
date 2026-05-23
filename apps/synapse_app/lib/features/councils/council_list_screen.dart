@@ -76,6 +76,11 @@ class _CouncilListScreenState extends State<CouncilListScreen> {
             onPressed: _loadCouncils,
           ),
           IconButton(
+            icon: const Icon(Icons.assistant_outlined),
+            tooltip: 'Assistant',
+            onPressed: () => context.push('/chat/sessions'),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings),
             tooltip: 'Settings',
             onPressed: () => context.push('/settings'),
