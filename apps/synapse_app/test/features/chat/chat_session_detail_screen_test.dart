@@ -51,8 +51,12 @@ SynapseApiClient _streamingClient({
           headers: {'content-type': 'application/json'},
         );
       }
-      // POST messages
-      if (req.method == 'POST' && req.url.path.endsWith('/messages')) {
+      // POST messages — or the lineage SSE endpoints (edit / regenerate)
+      // which share the same streaming wire format.
+      if (req.method == 'POST' &&
+          (req.url.path.endsWith('/messages') ||
+              req.url.path.endsWith('/edit') ||
+              req.url.path.endsWith('/regenerate'))) {
         // Stream byte-by-byte so the screen sees mid-frame intermediate states.
         final bytes = utf8.encode(streamBody);
         final controller = StreamController<List<int>>();
@@ -67,6 +71,24 @@ SynapseApiClient _streamingClient({
           controller.stream,
           streamStatus,
           headers: {'content-type': 'text/event-stream'},
+        );
+      }
+      // POST /fork — non-streaming, JSON response.
+      if (req.method == 'POST' && req.url.path.endsWith('/fork')) {
+        return http.StreamedResponse(
+          Stream.value(
+            utf8.encode(jsonEncode({
+              'id': 'child-sid',
+              'thread_id': 'child-tid',
+              'title': 'Fork of My chat',
+              'status': 'active',
+              'agent_config': {'model': 'openai:gpt-4o-mini', 'tools': []},
+              'created_at': '2026-05-23T10:00:00Z',
+              'updated_at': '2026-05-23T10:00:00Z',
+            })),
+          ),
+          201,
+          headers: {'content-type': 'application/json'},
         );
       }
       throw StateError('unexpected request: ${req.method} ${req.url}');
@@ -287,4 +309,141 @@ void main() {
       expect(find.textContaining('stream ended unexpectedly'), findsOneWidget);
     },
   );
+
+  // --- Phase 1B affordances -------------------------------------------------
+
+  Map<String, dynamic> historyEvent({
+    required int id,
+    required String type,
+    required String content,
+  }) =>
+      {
+        'id': id,
+        'thread_id': 'tid',
+        'event_type': type,
+        'actor_id': 'u',
+        'actor_name': 'u',
+        'content': content,
+        'metadata': const {},
+        'created_at': '2026-05-22T10:00:00Z',
+      };
+
+  testWidgets('edit pencil on user_message opens dialog and streams new turn',
+      (tester) async {
+    final client = _streamingClient(
+      session: _session(),
+      history: [
+        historyEvent(id: 7, type: 'user_message', content: 'original'),
+      ],
+      streamBody: _sse([
+        {'type': 'session_started', 'session_id': 'sid', 'thread_id': 'tid'},
+        {'type': 'token', 'content': 'edited answer'},
+        {'type': 'message_complete', 'thread_id': 'tid'},
+      ]),
+    );
+    await tester.pumpWidget(_wrap(client));
+    await tester.pumpAndSettle();
+
+    // Pencil icon is rendered for user_message rows.
+    expect(find.byIcon(Icons.edit_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.pumpAndSettle();
+
+    // The dialog prefills with the existing content; we replace it.
+    expect(find.text('Edit message'), findsOneWidget);
+    final dialogField = find.byType(TextField).last;
+    await tester.enterText(dialogField, 'new question');
+    await tester.tap(find.text('Save & resend'));
+    await tester.pumpAndSettle();
+
+    // The streamed reply lands.
+    expect(find.text('edited answer'), findsOneWidget);
+  });
+
+  testWidgets('regenerate icon on reflection re-runs the agent',
+      (tester) async {
+    final client = _streamingClient(
+      session: _session(),
+      history: [
+        historyEvent(id: 7, type: 'user_message', content: 'q'),
+        historyEvent(id: 8, type: 'reflection', content: 'first answer'),
+      ],
+      streamBody: _sse([
+        {'type': 'session_started', 'session_id': 'sid', 'thread_id': 'tid'},
+        {'type': 'token', 'content': 'alt answer'},
+        {'type': 'message_complete', 'thread_id': 'tid'},
+      ]),
+    );
+    await tester.pumpWidget(_wrap(client));
+    await tester.pumpAndSettle();
+
+    // Refresh icon is rendered only on reflection rows.
+    final refreshIcons = find.byIcon(Icons.refresh);
+    expect(refreshIcons, findsOneWidget);
+    await tester.tap(refreshIcons);
+    await tester.pumpAndSettle();
+
+    expect(find.text('alt answer'), findsOneWidget);
+  });
+
+  testWidgets('fork icon navigates to the child session', (tester) async {
+    final client = _streamingClient(
+      session: _session(),
+      history: [
+        historyEvent(id: 7, type: 'user_message', content: 'q'),
+      ],
+      streamBody: '',
+    );
+    // Wrap with a router that includes the child detail placeholder so the
+    // navigation target resolves.
+    final router = GoRouter(
+      initialLocation: '/chat/sessions/sid',
+      routes: [
+        GoRoute(
+          path: '/chat/sessions',
+          builder: (_, __) =>
+              const Scaffold(body: Text('list-placeholder')),
+        ),
+        GoRoute(
+          path: '/chat/sessions/:id',
+          builder: (_, state) {
+            final id = state.pathParameters['id']!;
+            if (id == 'child-sid') {
+              return const Scaffold(body: Text('child-placeholder'));
+            }
+            return ChatSessionDetailScreen(client: client, sessionId: id);
+          },
+        ),
+      ],
+    );
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    final forkIcons = find.byIcon(Icons.call_split);
+    expect(forkIcons, findsOneWidget);
+    await tester.tap(forkIcons);
+    await tester.pumpAndSettle();
+
+    expect(find.text('child-placeholder'), findsOneWidget);
+  });
+
+  testWidgets('archived session hides edit + regenerate affordances',
+      (tester) async {
+    final client = _streamingClient(
+      session: _session(status: 'archived'),
+      history: [
+        historyEvent(id: 7, type: 'user_message', content: 'q'),
+        historyEvent(id: 8, type: 'reflection', content: 'a'),
+      ],
+      streamBody: '',
+    );
+    await tester.pumpWidget(_wrap(client));
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.edit_outlined), findsNothing);
+    expect(find.byIcon(Icons.refresh), findsNothing);
+    // Fork is allowed even on archived sessions — a fork creates a new active
+    // session, which is the obvious way to continue from a closed one.
+    expect(find.byIcon(Icons.call_split), findsNWidgets(2));
+  });
 }

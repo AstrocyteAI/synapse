@@ -442,25 +442,23 @@ export async function archiveChatSession(id: string): Promise<void> {
 }
 
 /**
- * POST /v1/chat/sessions/:id/messages — streams SSE events back as they
- * arrive. The async generator yields one {@link ChatSseEvent} per server
- * frame; the consumer dispatches on `event.type`.
+ * Shared SSE-stream decoder used by `streamChatMessage`,
+ * `editChatMessage`, and `regenerateChatMessage` — three endpoints that
+ * all stream the same `ChatSseEvent` envelope.
  *
- * Callers should treat the absence of a final `message_complete` event as
- * a failed turn — see chat.md §4a "Error semantics".
- *
- * Uses fetch + ReadableStream (not EventSource), because EventSource doesn't
- * support custom headers — we need to attach the Bearer token.
+ * Uses fetch + ReadableStream (not EventSource) so the Bearer token can be
+ * attached. Yields one decoded event per server frame; malformed frames
+ * are dropped silently per the contract.
  */
-export async function* streamChatMessage(
-	sessionId: string,
-	content: string,
+async function* streamSse(
+	path: string,
+	body: unknown,
 	signal?: AbortSignal
 ): AsyncGenerator<ChatSseEvent, void, unknown> {
-	const res = await fetch(`${API_BASE}/v1/chat/sessions/${sessionId}/messages`, {
+	const res = await fetch(`${API_BASE}${path}`, {
 		method: 'POST',
 		headers: authHeaders(),
-		body: JSON.stringify({ content }),
+		body: JSON.stringify(body),
 		signal
 	});
 	if (!res.ok) {
@@ -506,4 +504,86 @@ export async function* streamChatMessage(
 	} finally {
 		reader.releaseLock();
 	}
+}
+
+/**
+ * POST /v1/chat/sessions/:id/messages — streams SSE events back as they
+ * arrive. The async generator yields one {@link ChatSseEvent} per server
+ * frame; the consumer dispatches on `event.type`.
+ *
+ * Callers should treat the absence of a final `message_complete` event as
+ * a failed turn — see chat.md §4a "Error semantics".
+ */
+export function streamChatMessage(
+	sessionId: string,
+	content: string,
+	signal?: AbortSignal
+): AsyncGenerator<ChatSseEvent, void, unknown> {
+	return streamSse(`/v1/chat/sessions/${sessionId}/messages`, { content }, signal);
+}
+
+// ---------------------------------------------------------------------------
+// Conversation editing (Phase 1B) — fork / edit / regenerate.
+// Wire contract: priv/contracts/chat-api-v1.openapi.json §§ fork, edit,
+// regenerate. See docs/_design/chat-with-tools.md §§ 8-9 for the design.
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /v1/chat/sessions/:id/fork — creates a new session at the given
+ * cursor. The new session's thread is a copy of the parent's up to and
+ * including `fromEventId`. The parent thread gets a `conversation_forked`
+ * marker event. Returns the new {@link ChatSession}.
+ */
+export async function forkChatSession(
+	sessionId: string,
+	fromEventId: number,
+	title?: string
+): Promise<ChatSession> {
+	return request(`/v1/chat/sessions/${sessionId}/fork`, {
+		method: 'POST',
+		body: JSON.stringify({ from_event_id: fromEventId, ...(title ? { title } : {}) })
+	});
+}
+
+/**
+ * POST /v1/chat/sessions/:id/messages/:messageId/edit — edits a user
+ * message in place (persists a `message_edited` marker referencing the
+ * original) and streams the regenerated agent turn over SSE.
+ *
+ * Only user messages can be edited — editing a reflection returns 422.
+ */
+export function editChatMessage(
+	sessionId: string,
+	messageId: number,
+	content: string,
+	signal?: AbortSignal
+): AsyncGenerator<ChatSseEvent, void, unknown> {
+	return streamSse(
+		`/v1/chat/sessions/${sessionId}/messages/${messageId}/edit`,
+		{ content },
+		signal
+	);
+}
+
+/**
+ * POST /v1/chat/sessions/:id/messages/:messageId/regenerate — re-runs the
+ * agent for the user message that produced the targeted reflection.
+ * Persists a `message_regenerated` marker; the original reflection is
+ * preserved so the UI can offer a carousel.
+ *
+ * `agentConfigOverride` is in-memory only — the session row is NOT
+ * mutated. Use it to try a different model on this regeneration only.
+ */
+export function regenerateChatMessage(
+	sessionId: string,
+	messageId: number,
+	agentConfigOverride?: AgentConfig,
+	signal?: AbortSignal
+): AsyncGenerator<ChatSseEvent, void, unknown> {
+	const body = agentConfigOverride ? { agent_config_override: agentConfigOverride } : {};
+	return streamSse(
+		`/v1/chat/sessions/${sessionId}/messages/${messageId}/regenerate`,
+		body,
+		signal
+	);
 }

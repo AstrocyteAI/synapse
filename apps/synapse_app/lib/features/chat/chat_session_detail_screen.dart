@@ -101,25 +101,34 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
     final content = _input.text.trim();
     if (content.isEmpty || _sending || _session == null) return;
     _input.clear();
+    await _runTurn(
+      userBubble: content,
+      stream: widget.client.streamChatMessage(widget.sessionId, content),
+    );
+  }
+
+  /// Drive any SSE stream (send / edit / regenerate) through the live
+  /// message reducer, applying the documented error semantics (absence of
+  /// `message_complete` → treated as failure).
+  Future<void> _runTurn({
+    required String? userBubble,
+    required Stream<ChatSseEvent> stream,
+  }) async {
+    if (_session == null) return;
     setState(() {
       _streamError = null;
       _sending = true;
-      _live.add(_UserMsg(content));
-      _live.add(_AssistantMsg()); // content="" streaming=true
+      if (userBubble != null) _live.add(_UserMsg(userBubble));
+      _live.add(_AssistantMsg());
     });
     _scrollToBottom();
 
     try {
-      await for (final evt in widget.client.streamChatMessage(
-        widget.sessionId,
-        content,
-      )) {
+      await for (final evt in stream) {
         if (!mounted) return;
         setState(() => _apply(evt));
         _scrollToBottom();
       }
-      // Stream ended without a message_complete — surface that as an error
-      // per the contract (chat.md §4a).
       if (mounted) {
         final last = _live.lastOrNull;
         if (last is _AssistantMsg && last.streaming) {
@@ -134,6 +143,63 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
       setState(() => _streamError = e.toString());
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  // --- edit / regenerate / fork --------------------------------------------
+
+  Future<void> _promptEdit(ThreadEvent original) async {
+    final controller = TextEditingController(text: original.content ?? '');
+    final newContent = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 6,
+          minLines: 2,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.of(ctx).pop(controller.text.trim()),
+            child: const Text('Save & resend'),
+          ),
+        ],
+      ),
+    );
+    if (newContent == null || newContent.isEmpty) return;
+    await _runTurn(
+      userBubble: newContent,
+      stream: widget.client
+          .editChatMessage(widget.sessionId, original.id, newContent),
+    );
+  }
+
+  Future<void> _regenerate(ThreadEvent reflection) async {
+    await _runTurn(
+      // No new user bubble — we're re-running the existing user message.
+      userBubble: null,
+      stream: widget.client
+          .regenerateChatMessage(widget.sessionId, reflection.id),
+    );
+  }
+
+  Future<void> _fork(ThreadEvent at) async {
+    try {
+      final child =
+          await widget.client.forkChatSession(widget.sessionId, at.id);
+      if (!mounted) return;
+      context.go('/chat/sessions/${child.id}');
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _streamError = e.message);
     }
   }
 
@@ -299,6 +365,11 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
     final isTool =
         e.eventType == 'tool_call' || e.eventType == 'tool_result';
     final isUser = e.eventType == 'user_message';
+    final isReflection = e.eventType == 'reflection';
+    final canEdit = isUser && _session?.isArchived != true && !_sending;
+    final canRegen =
+        isReflection && _session?.isArchived != true && !_sending;
+    final canFork = !_sending;
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
@@ -313,9 +384,49 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            e.eventType.toUpperCase(),
-            style: const TextStyle(fontSize: 10, color: Colors.grey),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  e.eventType.toUpperCase(),
+                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+              ),
+              if (canEdit)
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 16),
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Edit message',
+                  onPressed: () => _promptEdit(e),
+                ),
+              if (canRegen) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.refresh, size: 16),
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Regenerate response',
+                  onPressed: () => _regenerate(e),
+                ),
+              ],
+              if (canFork) ...[
+                const SizedBox(width: 4),
+                IconButton(
+                  icon: const Icon(Icons.call_split, size: 16),
+                  iconSize: 16,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  tooltip: 'Fork from here',
+                  onPressed: () => _fork(e),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 4),
           Text(

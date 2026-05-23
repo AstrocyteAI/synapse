@@ -461,19 +461,88 @@ class SynapseApiClient {
   Stream<ChatSseEvent> streamChatMessage(
     String sessionId,
     String content,
+  ) =>
+      _streamSse(
+        '/v1/chat/sessions/$sessionId/messages',
+        {'content': content},
+      );
+
+  // -------------------------------------------------------------------------
+  // Conversation editing (Phase 1B) — fork / edit / regenerate.
+  // -------------------------------------------------------------------------
+
+  /// POST /v1/chat/sessions/:id/fork — creates a child session whose
+  /// thread is a copy of the parent's up to and including [fromEventId].
+  /// The parent thread gets a `conversation_forked` marker event.
+  Future<ChatSession> forkChatSession(
+    String sessionId,
+    int fromEventId, {
+    String? title,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse('$baseUrl/v1/chat/sessions/$sessionId/fork');
+    final response = await _httpClient.post(
+      uri,
+      headers: headers,
+      body: jsonEncode({
+        'from_event_id': fromEventId,
+        if (title != null) 'title': title,
+      }),
+    );
+    _checkResponse(response);
+    return ChatSession.fromJson(
+      _unwrap(jsonDecode(response.body) as Map<String, dynamic>),
+    );
+  }
+
+  /// POST /v1/chat/sessions/:id/messages/:messageId/edit — edits a user
+  /// message in place and streams the regenerated agent turn. Only user
+  /// messages can be edited (server returns 422 otherwise).
+  Stream<ChatSseEvent> editChatMessage(
+    String sessionId,
+    int messageId,
+    String content,
+  ) =>
+      _streamSse(
+        '/v1/chat/sessions/$sessionId/messages/$messageId/edit',
+        {'content': content},
+      );
+
+  /// POST /v1/chat/sessions/:id/messages/:messageId/regenerate — re-runs
+  /// the agent for the user message that produced the target reflection.
+  ///
+  /// [agentConfigOverride] is in-memory only — the session row is NOT
+  /// mutated. Use it to try a different model on this regeneration only.
+  Stream<ChatSseEvent> regenerateChatMessage(
+    String sessionId,
+    int messageId, {
+    AgentConfig? agentConfigOverride,
+  }) =>
+      _streamSse(
+        '/v1/chat/sessions/$sessionId/messages/$messageId/regenerate',
+        agentConfigOverride == null
+            ? const <String, dynamic>{}
+            : {'agent_config_override': agentConfigOverride.toJson()},
+      );
+
+  // -------------------------------------------------------------------------
+  // Internals
+  // -------------------------------------------------------------------------
+
+  /// Shared SSE decoder for the three streaming chat endpoints.
+  Stream<ChatSseEvent> _streamSse(
+    String path,
+    Map<String, dynamic> body,
   ) async* {
     final headers = await _authHeaders();
-    final req = http.Request(
-      'POST',
-      Uri.parse('$baseUrl/v1/chat/sessions/$sessionId/messages'),
-    )
+    final req = http.Request('POST', Uri.parse('$baseUrl$path'))
       ..headers.addAll(headers)
-      ..body = jsonEncode({'content': content});
+      ..body = jsonEncode(body);
 
     final res = await _httpClient.send(req);
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      final body = await res.stream.bytesToString();
-      throw ApiException(res.statusCode, body);
+      final responseBody = await res.stream.bytesToString();
+      throw ApiException(res.statusCode, responseBody);
     }
 
     var buffer = '';

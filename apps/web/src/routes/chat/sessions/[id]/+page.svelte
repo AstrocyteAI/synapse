@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import {
+		editChatMessage,
+		forkChatSession,
 		getChatSession,
 		listEvents,
+		regenerateChatMessage,
 		streamChatMessage
 	} from '$lib/api/client';
 	import type { ChatSession, ChatSseEvent, ThreadEvent } from '$lib/api/types';
@@ -35,6 +39,10 @@
 	let sending = $state(false);
 	let streamError = $state('');
 
+	// Inline editor state — only one user_message can be in edit mode at a time.
+	let editingEventId = $state<number | null>(null);
+	let editingDraft = $state('');
+
 	onMount(async () => {
 		try {
 			session = await getChatSession(sessionId);
@@ -52,18 +60,35 @@
 		const content = inputValue.trim();
 		if (!content || sending || !session) return;
 		inputValue = '';
+		await runTurn({
+			userBubble: content,
+			stream: streamChatMessage(session.id, content)
+		});
+	}
+
+	/**
+	 * Drive the SSE stream for any of send / edit / regenerate, applying
+	 * events as they arrive and surfacing the documented error semantics
+	 * (no `message_complete` → treat as failed turn).
+	 */
+	async function runTurn({
+		userBubble,
+		stream
+	}: {
+		userBubble: string | null;
+		stream: AsyncGenerator<ChatSseEvent, void, unknown>;
+	}) {
 		streamError = '';
 		sending = true;
 
-		// Optimistically push user message + a streaming assistant placeholder.
-		live = [
-			...live,
-			{ kind: 'user', content },
-			{ kind: 'assistant', content: '', streaming: true }
-		];
+		// Optimistically push user bubble (when relevant) + assistant placeholder.
+		const next: LiveMessage[] = [...live];
+		if (userBubble !== null) next.push({ kind: 'user', content: userBubble });
+		next.push({ kind: 'assistant', content: '', streaming: true });
+		live = next;
 
 		try {
-			for await (const evt of streamChatMessage(session.id, content)) {
+			for await (const evt of stream) {
 				applyEvent(evt);
 			}
 			// Stream ended without an error event AND without message_complete —
@@ -78,6 +103,50 @@
 			streamError = err instanceof Error ? err.message : 'stream failed';
 		} finally {
 			sending = false;
+		}
+	}
+
+	// --- Edit / regenerate / fork handlers --- -------------------------------
+
+	function startEdit(e: ThreadEvent) {
+		editingEventId = e.id;
+		editingDraft = e.content ?? '';
+	}
+
+	function cancelEdit() {
+		editingEventId = null;
+		editingDraft = '';
+	}
+
+	async function confirmEdit() {
+		if (!session || editingEventId === null) return;
+		const draft = editingDraft.trim();
+		if (!draft) return;
+		const eventId = editingEventId;
+		editingEventId = null;
+		editingDraft = '';
+		await runTurn({
+			userBubble: draft,
+			stream: editChatMessage(session.id, eventId, draft)
+		});
+	}
+
+	async function regenerate(e: ThreadEvent) {
+		if (!session || sending) return;
+		await runTurn({
+			// No new user bubble — we're re-running the existing user message.
+			userBubble: null,
+			stream: regenerateChatMessage(session.id, e.id)
+		});
+	}
+
+	async function fork(e: ThreadEvent) {
+		if (!session) return;
+		try {
+			const child = await forkChatSession(session.id, e.id);
+			await goto(`/chat/sessions/${child.id}`);
+		} catch (err) {
+			streamError = err instanceof Error ? err.message : 'fork failed';
 		}
 	}
 
@@ -173,17 +242,84 @@
 		<div class="flex flex-1 flex-col gap-3 overflow-y-auto pr-1">
 			<!-- History (server-persisted) -->
 			{#each history as e (e.id)}
+				{@const isUserMsg = e.event_type === 'user_message'}
+				{@const isReflection = e.event_type === 'reflection'}
+				{@const isTool = e.event_type === 'tool_call' || e.event_type === 'tool_result'}
+				{@const editable = isUserMsg && session?.status === 'active'}
+				{@const regeneratable = isReflection && session?.status === 'active'}
 				<div
-					class="rounded-xl border border-zinc-800 px-4 py-2 text-sm {e.event_type === 'user_message'
+					class="group relative rounded-xl border border-zinc-800 px-4 py-2 text-sm {isUserMsg
 						? 'bg-indigo-950/40'
-						: e.event_type === 'tool_call' || e.event_type === 'tool_result'
+						: isTool
 							? 'bg-amber-950/30 font-mono text-xs'
 							: 'bg-zinc-900'}"
 				>
-					<div class="mb-1 text-[10px] uppercase tracking-wide text-zinc-500">
-						{e.event_type}
+					<div class="mb-1 flex items-center justify-between gap-2">
+						<span class="text-[10px] uppercase tracking-wide text-zinc-500">
+							{e.event_type}
+						</span>
+						<div
+							class="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100"
+						>
+							{#if editable && editingEventId !== e.id}
+								<button
+									type="button"
+									onclick={() => startEdit(e)}
+									disabled={sending}
+									class="text-[10px] text-zinc-400 hover:text-indigo-300 disabled:opacity-40"
+									aria-label="Edit message"
+								>
+									✎ edit
+								</button>
+							{/if}
+							{#if regeneratable}
+								<button
+									type="button"
+									onclick={() => regenerate(e)}
+									disabled={sending}
+									class="text-[10px] text-zinc-400 hover:text-emerald-300 disabled:opacity-40"
+									aria-label="Regenerate response"
+								>
+									↻ regenerate
+								</button>
+							{/if}
+							<button
+								type="button"
+								onclick={() => fork(e)}
+								disabled={sending}
+								class="text-[10px] text-zinc-400 hover:text-sky-300 disabled:opacity-40"
+								aria-label="Fork from here"
+							>
+								⑂ fork
+							</button>
+						</div>
 					</div>
-					<div class="whitespace-pre-wrap text-zinc-200">{e.content || ''}</div>
+					{#if editingEventId === e.id}
+						<textarea
+							bind:value={editingDraft}
+							rows="3"
+							class="w-full rounded border border-indigo-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:outline-none"
+						></textarea>
+						<div class="mt-2 flex justify-end gap-2">
+							<button
+								type="button"
+								onclick={cancelEdit}
+								class="text-xs text-zinc-400 hover:text-zinc-200"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onclick={confirmEdit}
+								disabled={!editingDraft.trim() || sending}
+								class="rounded bg-indigo-600 px-2 py-0.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+							>
+								Save & resend
+							</button>
+						</div>
+					{:else}
+						<div class="whitespace-pre-wrap text-zinc-200">{e.content || ''}</div>
+					{/if}
 				</div>
 			{/each}
 

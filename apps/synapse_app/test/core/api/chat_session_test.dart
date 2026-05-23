@@ -350,4 +350,162 @@ void main() {
       }
     });
   });
+
+  // -------------------------------------------------------------------
+  // Conversation editing — fork / edit / regenerate
+  // -------------------------------------------------------------------
+
+  group('forkChatSession', () {
+    test('POSTs from_event_id (+ title) and returns the new ChatSession',
+        () async {
+      Map<String, dynamic>? captured;
+      String? capturedUrl;
+      final client = makeClient((req) async {
+        capturedUrl = req.url.toString();
+        captured = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'id': 'child',
+            'thread_id': 'tid-child',
+            'title': 'branch',
+            'status': 'active',
+            'agent_config': {},
+            'created_at': '2026-05-23T10:00:00Z',
+            'updated_at': '2026-05-23T10:00:00Z',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      final child =
+          await client.forkChatSession('parent-id', 42, title: 'branch');
+      expect(child.id, 'child');
+      expect(capturedUrl, contains('/v1/chat/sessions/parent-id/fork'));
+      expect(captured, {'from_event_id': 42, 'title': 'branch'});
+    });
+
+    test('omits title when not provided', () async {
+      Map<String, dynamic>? captured;
+      final client = makeClient((req) async {
+        captured = jsonDecode(req.body) as Map<String, dynamic>;
+        return http.Response(
+          jsonEncode({
+            'id': 'c',
+            'thread_id': 't',
+            'title': 'Fork of …',
+            'status': 'active',
+            'agent_config': {},
+            'created_at': '2026-05-23T10:00:00Z',
+            'updated_at': '2026-05-23T10:00:00Z',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+      await client.forkChatSession('p', 1);
+      expect(captured, {'from_event_id': 1});
+    });
+
+    test('throws ApiException on non-2xx', () async {
+      final client = makeClient(
+        (req) async => http.Response('boom', 422),
+      );
+      await expectLater(
+        client.forkChatSession('p', 999),
+        throwsA(isA<ApiException>()),
+      );
+    });
+  });
+
+  group('editChatMessage', () {
+    test('POSTs to the edit path and streams SSE events back', () async {
+      final body = frames([
+        {'type': 'token', 'content': 'edited'},
+        {'type': 'message_complete', 'thread_id': 't'},
+      ]);
+      String? capturedUrl;
+      Map<String, dynamic>? capturedBody;
+      final client = SynapseApiClient(
+        baseUrl: 'http://localhost:8000',
+        tokenStore: TokenStore(),
+        httpClient: MockClient.streaming((req, _) async {
+          capturedUrl = req.url.toString();
+          capturedBody = jsonDecode((req as http.Request).body)
+              as Map<String, dynamic>;
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(body)),
+            200,
+            headers: {'content-type': 'text/event-stream'},
+          );
+        }),
+      );
+
+      final events = await client.editChatMessage('sid', 7, 'new').toList();
+      expect(capturedUrl, contains('/v1/chat/sessions/sid/messages/7/edit'));
+      expect(capturedBody, {'content': 'new'});
+      expect(events.map((e) => e.runtimeType.toString()),
+          ['TokenEvent', 'MessageCompleteEvent']);
+    });
+  });
+
+  group('regenerateChatMessage', () {
+    test('POSTs an empty body when no override is given', () async {
+      final body = frames([
+        {'type': 'message_complete', 'thread_id': 't'}
+      ]);
+      Map<String, dynamic>? capturedBody;
+      final client = SynapseApiClient(
+        baseUrl: 'http://localhost:8000',
+        tokenStore: TokenStore(),
+        httpClient: MockClient.streaming((req, _) async {
+          capturedBody = jsonDecode((req as http.Request).body)
+              as Map<String, dynamic>;
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(body)),
+            200,
+          );
+        }),
+      );
+
+      final events = await client.regenerateChatMessage('sid', 7).toList();
+      expect(capturedBody, isEmpty);
+      expect(events, hasLength(1));
+    });
+
+    test('forwards agent_config_override when provided', () async {
+      final body = frames([
+        {'type': 'message_complete', 'thread_id': 't'}
+      ]);
+      Map<String, dynamic>? capturedBody;
+      final client = SynapseApiClient(
+        baseUrl: 'http://localhost:8000',
+        tokenStore: TokenStore(),
+        httpClient: MockClient.streaming((req, _) async {
+          capturedBody = jsonDecode((req as http.Request).body)
+              as Map<String, dynamic>;
+          return http.StreamedResponse(
+            Stream.value(utf8.encode(body)),
+            200,
+          );
+        }),
+      );
+
+      await client
+          .regenerateChatMessage(
+            'sid',
+            7,
+            agentConfigOverride: const AgentConfig(
+              model: 'anthropic:claude-3-5-sonnet',
+            ),
+          )
+          .toList();
+
+      expect(capturedBody, {
+        'agent_config_override': {
+          'model': 'anthropic:claude-3-5-sonnet',
+          'tools': <String>[],
+        }
+      });
+    });
+  });
 }

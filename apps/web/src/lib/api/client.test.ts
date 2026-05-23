@@ -14,7 +14,8 @@ import type { ChatSseEvent } from './types';
 // which is undefined under vitest's node environment. The default in client.ts
 // (`http://localhost:8000`) keeps everything happy.
 
-const { streamChatMessage } = await import('./client');
+const { streamChatMessage, forkChatSession, editChatMessage, regenerateChatMessage } =
+	await import('./client');
 
 // --------------------------------------------------------------------------
 // Helpers
@@ -208,5 +209,199 @@ describe('streamChatMessage', () => {
 		const got = await collect(streamChatMessage('sid', 'hi'));
 		// Only the first frame survives; the second is silently dropped.
 		expect(got).toEqual([{ type: 'token', content: '1' }]);
+	});
+});
+
+// --------------------------------------------------------------------------
+// Conversation editing — fork / edit / regenerate
+// --------------------------------------------------------------------------
+
+describe('forkChatSession', () => {
+	beforeEach(() => {
+		vi.stubGlobal('localStorage', {
+			getItem: () => null,
+			setItem: () => undefined,
+			removeItem: () => undefined
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	it('POSTs from_event_id (+ optional title) and returns the new ChatSession', async () => {
+		const newSession = {
+			id: 'child',
+			thread_id: 'tid-child',
+			title: 'branch',
+			status: 'active',
+			agent_config: {},
+			created_at: '2026-05-23T10:00:00Z',
+			updated_at: '2026-05-23T10:00:00Z'
+		};
+		const captured: { url?: string; body?: unknown } = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				captured.url = url;
+				captured.body = init?.body && JSON.parse(init.body as string);
+				return new Response(JSON.stringify(newSession), {
+					status: 201,
+					headers: { 'content-type': 'application/json' }
+				});
+			})
+		);
+
+		const child = await forkChatSession('parent-id', 42, 'branch');
+		expect(child.id).toBe('child');
+		expect(captured.url).toContain('/v1/chat/sessions/parent-id/fork');
+		expect(captured.body).toEqual({ from_event_id: 42, title: 'branch' });
+	});
+
+	it('omits title when not provided', async () => {
+		let capturedBody: unknown;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				capturedBody = init?.body && JSON.parse(init.body as string);
+				return new Response(
+					JSON.stringify({
+						id: 'c',
+						thread_id: 't',
+						title: 'Fork of …',
+						status: 'active',
+						agent_config: {},
+						created_at: '2026-05-23T10:00:00Z',
+						updated_at: '2026-05-23T10:00:00Z'
+					}),
+					{ status: 201, headers: { 'content-type': 'application/json' } }
+				);
+			})
+		);
+
+		await forkChatSession('p', 1);
+		expect(capturedBody).toEqual({ from_event_id: 1 });
+	});
+
+	it('throws on non-2xx', async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response('nope', { status: 422 }))
+		);
+		await expect(forkChatSession('p', 999)).rejects.toThrow(/422/);
+	});
+});
+
+describe('editChatMessage', () => {
+	beforeEach(() => {
+		vi.stubGlobal('localStorage', {
+			getItem: () => null,
+			setItem: () => undefined,
+			removeItem: () => undefined
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	it('POSTs to the edit path and streams SSE events back', async () => {
+		const enc = new TextEncoder();
+		const body = `data: ${JSON.stringify({ type: 'token', content: 'edited' })}\n\n`;
+		const captured: { url?: string; body?: unknown } = {};
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				captured.url = url;
+				captured.body = init?.body && JSON.parse(init.body as string);
+				return new Response(
+					new ReadableStream({
+						start(c) {
+							c.enqueue(enc.encode(body));
+							c.close();
+						}
+					}),
+					{ status: 200 }
+				);
+			})
+		);
+
+		const events: unknown[] = [];
+		for await (const e of editChatMessage('sid', 7, 'new content')) events.push(e);
+		expect(captured.url).toContain('/v1/chat/sessions/sid/messages/7/edit');
+		expect(captured.body).toEqual({ content: 'new content' });
+		expect(events).toEqual([{ type: 'token', content: 'edited' }]);
+	});
+});
+
+describe('regenerateChatMessage', () => {
+	beforeEach(() => {
+		vi.stubGlobal('localStorage', {
+			getItem: () => null,
+			setItem: () => undefined,
+			removeItem: () => undefined
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+	});
+
+	it('POSTs an empty body when no override is given', async () => {
+		const enc = new TextEncoder();
+		let captured: unknown;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				captured = init?.body && JSON.parse(init.body as string);
+				return new Response(
+					new ReadableStream({
+						start(c) {
+							c.enqueue(
+								enc.encode(`data: ${JSON.stringify({ type: 'message_complete' })}\n\n`)
+							);
+							c.close();
+						}
+					}),
+					{ status: 200 }
+				);
+			})
+		);
+
+		const events: unknown[] = [];
+		for await (const e of regenerateChatMessage('sid', 7)) events.push(e);
+		expect(captured).toEqual({});
+		expect(events).toEqual([{ type: 'message_complete' }]);
+	});
+
+	it('forwards agent_config_override when provided', async () => {
+		const enc = new TextEncoder();
+		let captured: unknown;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (_url: string, init?: RequestInit) => {
+				captured = init?.body && JSON.parse(init.body as string);
+				return new Response(
+					new ReadableStream({
+						start(c) {
+							c.enqueue(
+								enc.encode(`data: ${JSON.stringify({ type: 'message_complete' })}\n\n`)
+							);
+							c.close();
+						}
+					}),
+					{ status: 200 }
+				);
+			})
+		);
+
+		for await (const _ of regenerateChatMessage('sid', 7, {
+			model: 'anthropic:claude-3-5-sonnet'
+		})) {
+			// drain
+		}
+		expect(captured).toEqual({
+			agent_config_override: { model: 'anthropic:claude-3-5-sonnet' }
+		});
 	});
 });
