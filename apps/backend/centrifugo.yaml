@@ -16,12 +16,29 @@ http_api:
 
 # Channel namespaces
 namespaces:
+  # `council:{session_id}` — live broadcasts from the orchestrator
+  # (precedents_ready, stage_started, stage{N}_complete, red_team_started,
+  # red_team_complete, deliberation_round_started). Ephemeral, transient.
   - name: council
     presence: true           # track connected clients per channel
     join_leave: true         # emit join/leave events
     history_size: 200        # keep last 200 events per channel
     history_ttl: "48h"       # retain history for 48 hours
     force_recovery: true     # clients auto-recover missed events on reconnect
+    allow_subscribe_for_client: true
+
+  # `thread:{thread_id}` — persisted ThreadEvent broadcasts (user_message,
+  # member_response, verdict, reflection, …). The backend publishes here
+  # whenever it appends to thread_events; the Svelte/Flutter clients
+  # subscribe here for the live chat surface. WITHOUT this declaration
+  # the namespace falls into the unconfigured root and client subscriptions
+  # are rejected — see https://centrifugal.dev/docs/server/channels.
+  - name: thread
+    presence: false          # not useful — one consumer per principal
+    join_leave: false
+    history_size: 500        # 500 thread_events covers a long council
+    history_ttl: "48h"
+    force_recovery: true
     allow_subscribe_for_client: true
 
 log:
