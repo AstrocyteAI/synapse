@@ -103,11 +103,21 @@ class SynapseApiClient {
     required String question,
     String? templateId,
     String? councilType,
+    CouncilMode mode = CouncilMode.standard,
   }) async {
     final headers = await _authHeaders();
     final body = <String, dynamic>{'question': question};
     if (templateId != null) body['template_id'] = templateId;
     if (councilType != null) body['council_type'] = councilType;
+    // Backend opt-in is asymmetric: Synapse OSS gates red-team / multi-round
+    // on a top-level `council_type` field; Cerebro on `settings.mode`. Send
+    // both — each backend ignores the unrecognised one — so the same call
+    // works against either backend. `councilType` (when explicitly passed)
+    // takes precedence over the mode-derived `council_type`.
+    if (mode != CouncilMode.standard) {
+      body['council_type'] ??= mode.wire;
+      body['settings'] = {'mode': mode.wire};
+    }
 
     final uri = Uri.parse('$baseUrl/v1/councils');
     final response = await _httpClient.post(

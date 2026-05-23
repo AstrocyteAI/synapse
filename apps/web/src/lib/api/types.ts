@@ -55,7 +55,45 @@ export interface CouncilDetail extends CouncilSummary {
 	contribution_deadline: string | null;
 	// B7 — scheduled councils
 	run_at: string | null;
+	// Red team + multi-round deliberation rounds, OSS-shaped JSONB. Empty
+	// when the council didn't opt into either mode. See
+	// docs/_design/realtime.md §5 + cerebro/docs/_design/chat-with-tools.md.
+	deliberation_rounds?: DeliberationRound[];
 }
+
+/**
+ * One entry in `council.deliberation_rounds`. The shape varies by `mode`:
+ *
+ *   - `mode === "red_team"`: `attacks: MemberCritique[]`
+ *   - `mode === "deliberation"`: `critiques: MemberCritique[]` +
+ *     `revised_responses: StageOneResponse[]`
+ *
+ * `converged` is `false` for red team (no convergence check) and `true|false`
+ * per round for multi-round.
+ */
+export interface DeliberationRound {
+	round: number;
+	mode: 'red_team' | 'deliberation';
+	converged: boolean;
+	attacks?: MemberCritique[];
+	critiques?: MemberCritique[];
+	revised_responses?: Record<string, unknown>[];
+}
+
+export interface MemberCritique {
+	member_id: string | null;
+	member_name: string;
+	critique: string;
+	error: string | null;
+}
+
+/**
+ * Council mode opt-in. "standard" runs gather → rank → synthesise with no
+ * extra rounds. "red_team" inserts a single adversarial round between
+ * Stage 1 and Stage 2. "deliberation" runs the critique/revise loop up to
+ * 3 rounds, breaking early on convergence.
+ */
+export type CouncilMode = 'standard' | 'red_team' | 'deliberation';
 
 export interface CreateCouncilResponse {
 	session_id: string;

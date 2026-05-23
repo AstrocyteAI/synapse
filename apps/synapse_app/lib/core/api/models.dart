@@ -47,6 +47,9 @@ class CouncilDetail extends CouncilSummary {
   final String? runAt;
   final List<Map<String, dynamic>> members;
   final Map<String, dynamic>? conflictMetadata;
+  /// Red team + multi-round critique rounds. Empty when the council ran
+  /// in standard mode. See docs/_design/realtime.md §5.
+  final List<DeliberationRound> deliberationRounds;
 
   const CouncilDetail({
     required super.sessionId,
@@ -68,6 +71,7 @@ class CouncilDetail extends CouncilSummary {
     this.runAt,
     required this.members,
     this.conflictMetadata,
+    this.deliberationRounds = const [],
   });
 
   factory CouncilDetail.fromJson(Map<String, dynamic> json) {
@@ -78,6 +82,12 @@ class CouncilDetail extends CouncilSummary {
     final conflictMeta = json['conflict_metadata'] != null
         ? Map<String, dynamic>.from(json['conflict_metadata'] as Map)
         : null;
+    final rounds = (json['deliberation_rounds'] as List<dynamic>?)
+            ?.map((r) => DeliberationRound.fromJson(
+                  Map<String, dynamic>.from(r as Map),
+                ))
+            .toList() ??
+        const <DeliberationRound>[];
 
     return CouncilDetail(
       sessionId: json['session_id'] as String,
@@ -99,7 +109,104 @@ class CouncilDetail extends CouncilSummary {
       runAt: json['run_at'] as String?,
       members: members,
       conflictMetadata: conflictMeta,
+      deliberationRounds: rounds,
     );
+  }
+}
+
+/// One entry in `council.deliberation_rounds`. The shape varies by [mode]:
+///
+///   - `mode == "red_team"`: [attacks] is populated, [critiques] +
+///     [revisedResponses] are empty.
+///   - `mode == "deliberation"`: [critiques] + [revisedResponses] are
+///     populated, [attacks] is empty.
+class DeliberationRound {
+  final int round;
+  final String mode; // "red_team" | "deliberation"
+  final bool converged;
+  final List<MemberCritique> attacks;
+  final List<MemberCritique> critiques;
+  final List<Map<String, dynamic>> revisedResponses;
+
+  const DeliberationRound({
+    required this.round,
+    required this.mode,
+    required this.converged,
+    this.attacks = const [],
+    this.critiques = const [],
+    this.revisedResponses = const [],
+  });
+
+  factory DeliberationRound.fromJson(Map<String, dynamic> json) {
+    List<MemberCritique> critiques(String key) =>
+        (json[key] as List<dynamic>?)
+            ?.map((c) => MemberCritique.fromJson(
+                  Map<String, dynamic>.from(c as Map),
+                ))
+            .toList() ??
+        const <MemberCritique>[];
+
+    return DeliberationRound(
+      round: (json['round'] as int?) ?? 0,
+      mode: (json['mode'] as String?) ?? '',
+      converged: (json['converged'] as bool?) ?? false,
+      attacks: critiques('attacks'),
+      critiques: critiques('critiques'),
+      revisedResponses: (json['revised_responses'] as List<dynamic>?)
+              ?.map((r) => Map<String, dynamic>.from(r as Map))
+              .toList() ??
+          const <Map<String, dynamic>>[],
+    );
+  }
+}
+
+class MemberCritique {
+  final String? memberId;
+  final String memberName;
+  final String critique;
+  final String? error;
+
+  const MemberCritique({
+    required this.memberId,
+    required this.memberName,
+    required this.critique,
+    this.error,
+  });
+
+  factory MemberCritique.fromJson(Map<String, dynamic> json) => MemberCritique(
+        memberId: json['member_id'] as String?,
+        memberName: (json['member_name'] as String?) ?? '',
+        critique: (json['critique'] as String?) ?? '',
+        error: json['error'] as String?,
+      );
+}
+
+/// Council mode opt-in. "standard" runs gather → rank → synthesise with no
+/// extra rounds. "red_team" inserts one adversarial round between Stage 1
+/// and Stage 2. "deliberation" runs critique/revise up to 3 rounds.
+enum CouncilMode { standard, redTeam, deliberation }
+
+extension CouncilModeWire on CouncilMode {
+  String get wire {
+    switch (this) {
+      case CouncilMode.standard:
+        return 'standard';
+      case CouncilMode.redTeam:
+        return 'red_team';
+      case CouncilMode.deliberation:
+        return 'deliberation';
+    }
+  }
+
+  String get label {
+    switch (this) {
+      case CouncilMode.standard:
+        return 'Standard';
+      case CouncilMode.redTeam:
+        return 'Red team';
+      case CouncilMode.deliberation:
+        return 'Deliberation';
+    }
   }
 }
 

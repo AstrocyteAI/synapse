@@ -7,6 +7,7 @@
 	import ChatThread from '$lib/components/chat/ChatThread.svelte';
 	import ChatInput from '$lib/components/chat/ChatInput.svelte';
 	import VerdictCard from '$lib/components/council/VerdictCard.svelte';
+	import DeliberationRoundsCard from '$lib/components/council/DeliberationRoundsCard.svelte';
 	import type { CouncilDetail } from '$lib/api/types';
 
 	const sessionId = $page.params.id!;
@@ -219,6 +220,12 @@
 		{#if council.status === 'closed' && council.verdict}
 			<div class="shrink-0 border-b border-zinc-800 px-5 py-4">
 				<VerdictCard {council} />
+			</div>
+		{/if}
+
+		{#if council.deliberation_rounds && council.deliberation_rounds.length > 0}
+			<div class="shrink-0 border-b border-zinc-800 px-5 py-4">
+				<DeliberationRoundsCard rounds={council.deliberation_rounds} />
 			</div>
 		{/if}
 

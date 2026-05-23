@@ -17,6 +17,7 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
   List<Template> _templates = [];
   Template? _selectedTemplate;
   String _councilType = 'llm';
+  CouncilMode _mode = CouncilMode.standard;
   bool _loading = false;
   bool _loadingTemplates = true;
   String? _error;
@@ -57,6 +58,7 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
         question: question,
         templateId: _selectedTemplate?.id,
         councilType: _councilType,
+        mode: _mode,
       );
       if (mounted) {
         context.go('/councils/${response.sessionId}/chat');
@@ -144,6 +146,43 @@ class _CreateCouncilScreenState extends State<CreateCouncilScreen> {
                 selected: {_councilType},
                 onSelectionChanged: (s) =>
                     setState(() => _councilType = s.first),
+              ),
+              const SizedBox(height: 16),
+              const Text('Mode',
+                  style: TextStyle(fontSize: 13, color: Colors.white70)),
+              const SizedBox(height: 8),
+              SegmentedButton<CouncilMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: CouncilMode.standard,
+                    label: Text('Standard'),
+                  ),
+                  ButtonSegment(
+                    value: CouncilMode.redTeam,
+                    label: Text('Red team'),
+                  ),
+                  ButtonSegment(
+                    value: CouncilMode.deliberation,
+                    label: Text('Deliberation'),
+                  ),
+                ],
+                selected: {_mode},
+                onSelectionChanged: (s) =>
+                    setState(() => _mode = s.first),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  switch (_mode) {
+                    CouncilMode.standard =>
+                      'Gather → Rank → Synthesise.',
+                    CouncilMode.redTeam =>
+                      'One adversarial round attacking each member’s Stage 1 proposal.',
+                    CouncilMode.deliberation =>
+                      'Critique + revise loop, up to 3 rounds, breaks early on convergence.',
+                  },
+                  style: const TextStyle(fontSize: 11, color: Colors.white54),
+                ),
               ),
               const SizedBox(height: 24),
               if (_error != null)

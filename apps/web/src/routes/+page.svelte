@@ -4,12 +4,27 @@
 	import { createCouncil, getToken, listTemplates } from '$lib/api/client';
 	import ChatInput from '$lib/components/chat/ChatInput.svelte';
 	import TemplatePicker from '$lib/components/council/TemplatePicker.svelte';
-	import type { Template } from '$lib/api/types';
+	import type { CouncilMode, Template } from '$lib/api/types';
 
 	let submitting = $state(false);
 	let error = $state('');
 	let templates = $state<Template[]>([]);
 	let selectedTemplate = $state<string | null>(null);
+	let mode = $state<CouncilMode>('standard');
+
+	const modeOptions: { value: CouncilMode; label: string; desc: string }[] = [
+		{ value: 'standard', label: 'Standard', desc: 'Gather → Rank → Synthesise.' },
+		{
+			value: 'red_team',
+			label: 'Red team',
+			desc: 'One adversarial round attacking each member’s Stage 1 proposal.'
+		},
+		{
+			value: 'deliberation',
+			label: 'Deliberation',
+			desc: 'Critique + revise loop, up to 3 rounds, breaks early on convergence.'
+		}
+	];
 
 	onMount(async () => {
 		if (!getToken()) {
@@ -27,7 +42,7 @@
 		submitting = true;
 		error = '';
 		try {
-			const result = await createCouncil(content, selectedTemplate ?? undefined);
+			const result = await createCouncil(content, selectedTemplate ?? undefined, mode);
 			goto(`/councils/${result.session_id}`);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Something went wrong';
@@ -61,6 +76,28 @@
 				/>
 			</div>
 		{/if}
+
+		<div class="mb-4">
+			<div class="mb-1 text-xs font-medium uppercase tracking-wide text-zinc-500">Mode</div>
+			<div class="flex flex-wrap gap-2">
+				{#each modeOptions as opt (opt.value)}
+					<button
+						type="button"
+						onclick={() => (mode = opt.value)}
+						title={opt.desc}
+						aria-pressed={mode === opt.value}
+						class="rounded-xl border px-3 py-1.5 text-xs transition {mode === opt.value
+							? 'border-indigo-500 bg-indigo-950/40 text-indigo-300'
+							: 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'}"
+					>
+						{opt.label}
+					</button>
+				{/each}
+			</div>
+			<p class="mt-1.5 text-xs text-zinc-500">
+				{modeOptions.find((o) => o.value === mode)?.desc}
+			</p>
+		</div>
 
 		<ChatInput
 			placeholder={selectedTemplate

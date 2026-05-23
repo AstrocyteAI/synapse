@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
 import '../../widgets/council_status_badge.dart';
+import '../../widgets/deliberation_rounds_card.dart';
 import '../../widgets/verdict_card.dart';
 import '../../widgets/conflict_banner.dart';
 import '../chat/chat_screen.dart';
@@ -229,6 +230,10 @@ class _MetaPanel extends StatelessWidget {
             confidenceLabel: council.confidenceLabel,
             dissentDetected: council.dissentDetected,
           ),
+        ],
+        if (council.deliberationRounds.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          DeliberationRoundsCard(rounds: council.deliberationRounds),
         ],
       ],
     );

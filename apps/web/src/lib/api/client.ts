@@ -101,11 +101,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export async function createCouncil(
 	question: string,
-	templateId?: string
+	templateId?: string,
+	mode: import('./types').CouncilMode = 'standard'
 ): Promise<CreateCouncilResponse> {
+	// Backend opt-in is asymmetric: Synapse OSS gates red team on a top-level
+	// `council_type` field; Cerebro on `settings.mode`. We send both — each
+	// backend ignores the unrecognised one — so the same client payload works
+	// against either backend. Standard mode sends neither (keeps the request
+	// body small for the common case).
+	const body: Record<string, unknown> = { question };
+	if (templateId) body.template_id = templateId;
+	if (mode !== 'standard') {
+		body.council_type = mode; // Synapse OSS contract
+		body.settings = { mode }; // Cerebro contract
+	}
 	return request('/v1/councils', {
 		method: 'POST',
-		body: JSON.stringify({ question, ...(templateId ? { template_id: templateId } : {}) })
+		body: JSON.stringify(body)
 	});
 }
 
