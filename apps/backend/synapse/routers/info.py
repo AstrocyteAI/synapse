@@ -49,6 +49,10 @@ class BackendInfo(BaseModel):
     #   "local"      — built-in email/password (POST /v1/auth/login)
     #   "jwt_oidc"   — external OIDC IdP (used by Cerebro + Casdoor)
     auth_mode: str
+    # realtime transport — drives SDK adapter / non-SDK client transport
+    # selection. Synapse OSS uses Centrifugo; Cerebro uses Phoenix Channels.
+    # See cerebro/docs/_design/realtime.md §6.
+    realtime: str  # "centrifugo" | "phoenix"
     features: FeatureFlagsOut
 
 
@@ -82,6 +86,9 @@ async def get_info(request: Request) -> BackendInfo:
         multi_tenant=False,
         billing=False,
         auth_mode=settings.synapse_auth_mode,
+        # Synapse OSS uses Centrifugo as the real-time transport.
+        # See cerebro/docs/_design/realtime.md §6 for the protocol split.
+        realtime="centrifugo",
         features=FeatureFlagsOut(
             notifications=_read_feature(ff, "notifications"),
             audit_log=_read_feature(ff, "audit_logs"),

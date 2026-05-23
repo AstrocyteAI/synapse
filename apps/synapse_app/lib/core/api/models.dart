@@ -316,6 +316,10 @@ class BackendInfo {
   final String authMode;
   final bool multiTenant;
   final bool billing;
+  /// Real-time transport: "centrifugo" (Synapse OSS) or "phoenix" (Cerebro).
+  /// SDK adapters and non-SDK clients pick the transport library on this
+  /// field. See cerebro/docs/_design/realtime.md §6.
+  final String realtime;
   /// OIDC issuer URL (present when authMode == "jwt_oidc")
   final String? oidcIssuer;
   /// OIDC client ID (present when authMode == "jwt_oidc")
@@ -327,6 +331,7 @@ class BackendInfo {
     required this.authMode,
     required this.multiTenant,
     required this.billing,
+    required this.realtime,
     this.oidcIssuer,
     this.oidcClientId,
   });
@@ -339,6 +344,9 @@ class BackendInfo {
       authMode: (json['auth_mode'] as String?) ?? 'jwt_hs256',
       multiTenant: (json['multi_tenant'] as bool?) ?? false,
       billing: (json['billing'] as bool?) ?? false,
+      // Fall back to "centrifugo" when the server is old enough to predate
+      // this field — that's the historical (Synapse OSS) default.
+      realtime: (json['realtime'] as String?) ?? 'centrifugo',
       oidcIssuer: oidc?['issuer'] as String?,
       oidcClientId: oidc?['client_id'] as String?,
     );

@@ -13,202 +13,602 @@
   "paths": {
     "/v1/councils": {
       "get": {
-        "tags": ["Councils"],
+        "tags": [
+          "Councils"
+        ],
         "summary": "List councils",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Council list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilListResponse" } } } }
+          "200": {
+            "description": "Council list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilListResponse"
+                }
+              }
+            }
+          }
         }
       },
       "post": {
-        "tags": ["Councils"],
+        "tags": [
+          "Councils"
+        ],
         "summary": "Create a council",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilCreate" } } } },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouncilCreate"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": { "description": "Council created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
-          "202": { "description": "Council accepted", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } }
+          "201": {
+            "description": "Council created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Council accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/councils/{id}": {
       "get": {
-        "tags": ["Councils"],
+        "tags": [
+          "Councils"
+        ],
         "summary": "Get a council",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CouncilId"
+          }
+        ],
         "responses": {
-          "200": { "description": "Council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": {
+            "description": "Council",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/v1/councils/{id}/start": {
       "post": {
-        "tags": ["Councils"],
+        "tags": [
+          "Councils"
+        ],
         "summary": "Start a council",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CouncilId"
+          }
+        ],
         "responses": {
-          "200": { "description": "Running council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": {
+            "description": "Running council",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/v1/councils/{id}/close": {
       "post": {
-        "tags": ["Councils"],
+        "tags": [
+          "Councils"
+        ],
         "summary": "Close a council",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "$ref": "#/components/parameters/CouncilId" }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/CouncilId"
+          }
+        ],
         "responses": {
-          "200": { "description": "Closed council", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CouncilResponse" } } } },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "200": {
+            "description": "Closed council",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouncilResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/v1/socket/token": {
       "get": {
-        "tags": ["Realtime"],
+        "tags": [
+          "Realtime"
+        ],
         "summary": "Issue a realtime transport descriptor",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Realtime transport descriptor", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RealtimeDescriptor" } } } }
+          "200": {
+            "description": "Realtime transport descriptor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RealtimeDescriptor"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/memory/recall": {
       "get": {
-        "tags": ["Memory"],
+        "tags": [
+          "Memory"
+        ],
         "summary": "Recall memories",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "q", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "bank", "in": "query", "required": false, "schema": { "type": "string", "default": "default" } },
-          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "default": 10 } }
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "bank",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "default"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Memory recall result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MemoryRecallResponse" } } } }
+          "200": {
+            "description": "Memory recall result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryRecallResponse"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/info": {
       "get": {
-        "tags": ["Info"],
+        "tags": [
+          "Info"
+        ],
         "summary": "Backend deployment metadata (public)",
         "description": "Returns backend type (synapse/cerebro), version, multi-tenant flag, billing flag, and feature flags. Used by clients to be backend-agnostic.",
         "responses": {
-          "200": { "description": "Backend info", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BackendInfo" } } } }
+          "200": {
+            "description": "Backend info",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackendInfo"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/audit_logs": {
       "get": {
-        "tags": ["Audit Logs"],
-        "summary": "[Deprecated] List tenant audit logs — use /v1/admin/audit-log",
+        "tags": [
+          "Audit Logs"
+        ],
+        "summary": "[Deprecated] List tenant audit logs \u2014 use /v1/admin/audit-log",
         "deprecated": true,
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Audit logs", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditLogListResponse" } } } },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Audit logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/v1/admin/audit-log": {
       "get": {
-        "tags": ["Audit Logs"],
+        "tags": [
+          "Audit Logs"
+        ],
         "summary": "List tenant audit log (cursor-paginated)",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 50, "minimum": 1, "maximum": 200 } },
-          { "name": "before_id", "in": "query", "schema": { "type": "integer" } },
-          { "name": "principal", "in": "query", "schema": { "type": "string" } },
-          { "name": "event_type", "in": "query", "schema": { "type": "string" } },
-          { "name": "resource_type", "in": "query", "schema": { "type": "string" } }
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "minimum": 1,
+              "maximum": 200
+            }
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "principal",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "resource_type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Audit log page", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuditLogListResponse" } } } },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "200": {
+            "description": "Audit log page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditLogListResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/v1/notifications/preferences": {
       "get": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Get my notification preferences (EE Team+)",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferences" } } } },
-          "501": { "description": "Feature not licensed" }
+          "200": {
+            "description": "Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Feature not licensed"
+          }
         }
       },
       "put": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Update my notification preferences (EE Team+)",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferencesUpdate" } } } },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferencesUpdate"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Preferences", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationPreferences" } } } },
-          "501": { "description": "Feature not licensed" }
+          "200": {
+            "description": "Preferences",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationPreferences"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Feature not licensed"
+          }
         }
       }
     },
     "/v1/notifications/devices": {
       "get": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "List my push notification endpoints (EE Team+)",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "responses": {
-          "200": { "description": "Devices", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceTokenList" } } } },
-          "501": { "description": "Feature not licensed" }
+          "200": {
+            "description": "Devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceTokenList"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Feature not licensed"
+          }
         }
       },
       "post": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Register a push notification endpoint (EE Team+)",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceTokenCreate" } } } },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTokenCreate"
+              }
+            }
+          }
+        },
         "responses": {
-          "201": { "description": "Device registered", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeviceToken" } } } },
-          "501": { "description": "Feature not licensed" }
+          "201": {
+            "description": "Device registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceToken"
+                }
+              }
+            }
+          },
+          "501": {
+            "description": "Feature not licensed"
+          }
         }
       }
     },
     "/v1/notifications/devices/{token_id}": {
       "delete": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Unregister a push notification endpoint (EE Team+)",
-        "security": [{ "bearerAuth": [] }],
-        "parameters": [{ "name": "token_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "token_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
-          "204": { "description": "Deleted" },
-          "404": { "$ref": "#/components/responses/NotFound" },
-          "501": { "description": "Feature not licensed" }
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "501": {
+            "description": "Feature not licensed"
+          }
         }
       }
     },
     "/v1/notifications/feed": {
       "get": {
-        "tags": ["Notifications"],
+        "tags": [
+          "Notifications"
+        ],
         "summary": "Recent notification feed for the current user",
-        "security": [{ "bearerAuth": [] }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
         "parameters": [
-          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "minimum": 1, "maximum": 50 } }
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
         ],
         "responses": {
-          "200": { "description": "Feed", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/NotificationFeed" } } } }
+          "200": {
+            "description": "Feed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationFeed"
+                }
+              }
+            }
+          }
         }
       }
     },
     "/v1/mcp": {
       "post": {
-        "tags": ["MCP"],
+        "tags": [
+          "MCP"
+        ],
         "summary": "Dispatch a Synapse MCP tool",
-        "security": [{ "apiKeyAuth": [] }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MCPRequest" } } } },
+        "security": [
+          {
+            "apiKeyAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPRequest"
+              }
+            }
+          }
+        },
         "responses": {
-          "200": { "description": "Tool result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MCPResponse" } } } },
-          "422": { "$ref": "#/components/responses/UnprocessableEntity" }
+          "200": {
+            "description": "Tool result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          }
         }
       }
     }
@@ -219,215 +619,564 @@
         "name": "id",
         "in": "path",
         "required": true,
-        "schema": { "type": "string", "format": "uuid" }
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
       }
     },
     "securitySchemes": {
-      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
-      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "x-api-key" }
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-api-key"
+      }
     },
     "responses": {
-      "Forbidden": { "description": "Forbidden" },
-      "NotFound": { "description": "Not found" },
-      "UnprocessableEntity": { "description": "Invalid request" }
+      "Forbidden": {
+        "description": "Forbidden"
+      },
+      "NotFound": {
+        "description": "Not found"
+      },
+      "UnprocessableEntity": {
+        "description": "Invalid request"
+      }
     },
     "schemas": {
       "Council": {
         "type": "object",
         "properties": {
-          "id": { "type": "string", "format": "uuid" },
-          "title": { "type": ["string", "null"] },
-          "question": { "type": "string" },
-          "status": { "type": "string" },
-          "chairman_model": { "type": ["string", "null"] },
-          "members": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
-          "verdict": { "type": ["object", "string", "null"], "additionalProperties": true },
-          "settings": { "type": "object", "additionalProperties": true }
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "question": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "chairman_model": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "verdict": {
+            "type": [
+              "object",
+              "string",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
-        "required": ["id", "question", "status"]
+        "required": [
+          "id",
+          "question",
+          "status"
+        ]
       },
       "CouncilCreate": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "question": { "type": "string" },
-          "chairman_model": { "type": "string" },
-          "members": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
-          "settings": { "type": "object", "additionalProperties": true }
+          "title": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "chairman_model": {
+            "type": "string"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": true
+            }
+          },
+          "settings": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
-        "required": ["question"]
+        "required": [
+          "question"
+        ]
       },
       "CouncilResponse": {
         "type": "object",
         "properties": {
-          "data": { "$ref": "#/components/schemas/Council" }
+          "data": {
+            "$ref": "#/components/schemas/Council"
+          }
         },
-        "required": ["data"]
+        "required": [
+          "data"
+        ]
       },
       "CouncilListResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/Council" } }
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Council"
+            }
+          }
         },
-        "required": ["data"]
+        "required": [
+          "data"
+        ]
       },
       "RealtimeDescriptor": {
         "type": "object",
         "properties": {
-          "transport": { "type": "string", "enum": ["phoenix", "centrifugo"] },
-          "url": { "type": "string" },
-          "token": { "type": "string" },
-          "expires_in": { "type": "integer" },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "phoenix",
+              "centrifugo"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          },
+          "expires_in": {
+            "type": "integer"
+          },
           "topics": {
             "type": "object",
             "properties": {
-              "council": { "type": "string" },
-              "thread": { "type": "string" }
+              "council": {
+                "type": "string"
+              },
+              "thread": {
+                "type": "string"
+              }
             },
-            "required": ["council", "thread"]
+            "required": [
+              "council",
+              "thread"
+            ]
           }
         },
-        "required": ["transport", "url", "token", "expires_in", "topics"]
+        "required": [
+          "transport",
+          "url",
+          "token",
+          "expires_in",
+          "topics"
+        ]
       },
       "BackendInfo": {
         "type": "object",
         "properties": {
-          "backend": { "type": "string", "enum": ["synapse", "cerebro"] },
-          "version": { "type": "string" },
-          "contract_version": { "type": "string" },
-          "multi_tenant": { "type": "boolean" },
-          "billing": { "type": "boolean" },
-          "auth_mode": { "type": "string", "enum": ["jwt_hs256", "jwt_oidc", "local"] },
+          "backend": {
+            "type": "string",
+            "enum": [
+              "synapse",
+              "cerebro"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "contract_version": {
+            "type": "string"
+          },
+          "multi_tenant": {
+            "type": "boolean"
+          },
+          "billing": {
+            "type": "boolean"
+          },
+          "auth_mode": {
+            "type": "string",
+            "enum": [
+              "jwt_hs256",
+              "jwt_oidc",
+              "local"
+            ]
+          },
           "features": {
             "type": "object",
             "properties": {
-              "notifications": { "type": "boolean" },
-              "audit_log": { "type": "boolean" },
-              "saml_sso": { "type": "boolean" },
-              "scim": { "type": "boolean" },
-              "compliance_ui": { "type": "boolean" },
-              "quotas": { "type": "boolean" },
-              "tenant_admin": { "type": "boolean" }
+              "notifications": {
+                "type": "boolean"
+              },
+              "audit_log": {
+                "type": "boolean"
+              },
+              "saml_sso": {
+                "type": "boolean"
+              },
+              "scim": {
+                "type": "boolean"
+              },
+              "compliance_ui": {
+                "type": "boolean"
+              },
+              "quotas": {
+                "type": "boolean"
+              },
+              "tenant_admin": {
+                "type": "boolean"
+              }
             },
-            "required": ["notifications", "audit_log", "saml_sso", "scim", "compliance_ui", "quotas", "tenant_admin"]
+            "required": [
+              "notifications",
+              "audit_log",
+              "saml_sso",
+              "scim",
+              "compliance_ui",
+              "quotas",
+              "tenant_admin"
+            ]
+          },
+          "realtime": {
+            "type": "string",
+            "enum": [
+              "centrifugo",
+              "phoenix"
+            ],
+            "description": "Real-time transport this backend uses. SDK adapters and non-SDK clients pick the transport library on this value. Synapse OSS returns \"centrifugo\"; Cerebro returns \"phoenix\" (Phoenix Channels)."
           }
         },
-        "required": ["backend", "version", "contract_version", "multi_tenant", "billing", "auth_mode", "features"]
+        "required": [
+          "backend",
+          "version",
+          "contract_version",
+          "multi_tenant",
+          "billing",
+          "auth_mode",
+          "features",
+          "realtime"
+        ]
       },
       "MemoryRecallResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "object", "additionalProperties": true }
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
-        "required": ["data"]
+        "required": [
+          "data"
+        ]
       },
       "AuditEvent": {
         "type": "object",
         "properties": {
-          "id": { "type": ["integer", "string"] },
-          "event_type": { "type": "string" },
-          "actor_principal": { "type": "string" },
-          "tenant_id": { "type": ["string", "null"] },
-          "resource_type": { "type": ["string", "null"] },
-          "resource_id": { "type": ["string", "null"] },
-          "metadata": { "type": "object", "additionalProperties": true },
-          "created_at": { "type": "string" }
+          "id": {
+            "type": [
+              "integer",
+              "string"
+            ]
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "actor_principal": {
+            "type": "string"
+          },
+          "tenant_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resource_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resource_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string"
+          }
         },
-        "required": ["id", "event_type", "actor_principal", "metadata", "created_at"]
+        "required": [
+          "id",
+          "event_type",
+          "actor_principal",
+          "metadata",
+          "created_at"
+        ]
       },
       "AuditLogListResponse": {
         "type": "object",
         "properties": {
-          "data": { "type": "array", "items": { "$ref": "#/components/schemas/AuditEvent" } },
-          "count": { "type": "integer" },
-          "next_before_id": { "type": ["integer", "null"] }
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "count": {
+            "type": "integer"
+          },
+          "next_before_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
         },
-        "required": ["data"]
+        "required": [
+          "data"
+        ]
       },
       "NotificationPreferences": {
         "type": "object",
         "properties": {
-          "email_enabled": { "type": "boolean" },
-          "email_address": { "type": ["string", "null"] },
-          "ntfy_enabled": { "type": "boolean" },
-          "updated_at": { "type": "string" }
+          "email_enabled": {
+            "type": "boolean"
+          },
+          "email_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ntfy_enabled": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": "string"
+          }
         },
-        "required": ["email_enabled", "email_address", "ntfy_enabled", "updated_at"]
+        "required": [
+          "email_enabled",
+          "email_address",
+          "ntfy_enabled",
+          "updated_at"
+        ]
       },
       "NotificationPreferencesUpdate": {
         "type": "object",
         "properties": {
-          "email_enabled": { "type": "boolean" },
-          "email_address": { "type": ["string", "null"] },
-          "ntfy_enabled": { "type": "boolean" }
+          "email_enabled": {
+            "type": "boolean"
+          },
+          "email_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ntfy_enabled": {
+            "type": "boolean"
+          }
         }
       },
       "DeviceToken": {
         "type": "object",
         "properties": {
-          "id": { "type": "string" },
-          "token_type": { "type": "string", "enum": ["ntfy"] },
-          "token": { "type": "string" },
-          "device_label": { "type": ["string", "null"] },
-          "created_at": { "type": "string" }
+          "id": {
+            "type": "string"
+          },
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "ntfy"
+            ]
+          },
+          "token": {
+            "type": "string"
+          },
+          "device_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
         },
-        "required": ["id", "token_type", "token", "created_at"]
+        "required": [
+          "id",
+          "token_type",
+          "token",
+          "created_at"
+        ]
       },
       "DeviceTokenCreate": {
         "type": "object",
         "properties": {
-          "token_type": { "type": "string", "enum": ["ntfy"], "default": "ntfy" },
-          "token": { "type": "string", "minLength": 1, "maxLength": 512 },
-          "device_label": { "type": ["string", "null"], "maxLength": 128 }
+          "token_type": {
+            "type": "string",
+            "enum": [
+              "ntfy"
+            ],
+            "default": "ntfy"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "device_label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 128
+          }
         },
-        "required": ["token"]
+        "required": [
+          "token"
+        ]
       },
       "DeviceTokenList": {
         "type": "object",
         "properties": {
-          "count": { "type": "integer" },
-          "devices": { "type": "array", "items": { "$ref": "#/components/schemas/DeviceToken" } }
+          "count": {
+            "type": "integer"
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceToken"
+            }
+          }
         },
-        "required": ["count", "devices"]
+        "required": [
+          "count",
+          "devices"
+        ]
       },
       "NotificationFeedItem": {
         "type": "object",
         "properties": {
           "type": {
             "type": "string",
-            "enum": ["verdict_ready", "pending_approval", "in_progress", "summon_requested"]
+            "enum": [
+              "verdict_ready",
+              "pending_approval",
+              "in_progress",
+              "summon_requested"
+            ]
           },
-          "council_id": { "type": "string" },
-          "question": { "type": "string" },
-          "verdict": { "type": ["string", "null"] },
-          "confidence_label": { "type": ["string", "null"] },
-          "consensus_score": { "type": ["number", "null"] },
-          "occurred_at": { "type": ["string", "null"] }
+          "council_id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence_label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "consensus_score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "occurred_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         },
-        "required": ["type", "council_id", "question", "occurred_at"]
+        "required": [
+          "type",
+          "council_id",
+          "question",
+          "occurred_at"
+        ]
       },
       "NotificationFeed": {
         "type": "object",
         "properties": {
-          "items": { "type": "array", "items": { "$ref": "#/components/schemas/NotificationFeedItem" } },
-          "count": { "type": "integer" }
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationFeedItem"
+            }
+          },
+          "count": {
+            "type": "integer"
+          }
         },
-        "required": ["items", "count"]
+        "required": [
+          "items",
+          "count"
+        ]
       },
       "MCPRequest": {
         "type": "object",
         "properties": {
-          "tool": { "type": "string" },
-          "arguments": { "type": "object", "additionalProperties": true }
+          "tool": {
+            "type": "string"
+          },
+          "arguments": {
+            "type": "object",
+            "additionalProperties": true
+          }
         },
-        "required": ["tool", "arguments"]
+        "required": [
+          "tool",
+          "arguments"
+        ]
       },
       "MCPResponse": {
         "type": "object",
         "properties": {
           "result": {}
         },
-        "required": ["result"]
+        "required": [
+          "result"
+        ]
       }
     }
   }

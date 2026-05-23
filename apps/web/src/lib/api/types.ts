@@ -254,6 +254,11 @@ export interface BackendInfo {
 	auth_mode: string;
 	multi_tenant: boolean;
 	billing: boolean;
+	/**
+	 * Real-time transport. SDK adapters and non-SDK clients pick the
+	 * transport library on this field. See cerebro/docs/_design/realtime.md §6.
+	 */
+	realtime: 'centrifugo' | 'phoenix';
 	features: BackendFeatureFlags;
 	/** Present when auth_mode == "jwt_oidc" */
 	oidc?: OidcConfig | null;

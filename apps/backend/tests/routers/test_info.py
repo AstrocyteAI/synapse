@@ -35,6 +35,22 @@ def test_info_reports_synapse_backend_single_tenant():
     assert body["contract_version"] == "v1"
 
 
+def test_info_reports_centrifugo_realtime():
+    """Synapse OSS always uses Centrifugo as the real-time transport.
+
+    SDK adapters and non-SDK clients pick the transport library on this
+    field. See cerebro/docs/_design/realtime.md §6.
+    """
+    app = create_app()
+    with (
+        patch("synapse.main.get_settings", return_value=TEST_SETTINGS),
+        TestClient(app, raise_server_exceptions=True) as client,
+    ):
+        body = client.get("/v1/info").json()
+
+    assert body["realtime"] == "centrifugo"
+
+
 def test_info_reports_feature_flags():
     """Feature flags reflect what the deployment's license enables.
 
