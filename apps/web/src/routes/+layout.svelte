@@ -13,6 +13,7 @@
 
 	const navLinks = [
 		{ href: '/', label: 'Chat' },
+		{ href: '/chat/sessions', label: 'Assistant' },
 		{ href: '/councils', label: 'Councils' },
 		{ href: '/memory', label: 'Memory' },
 		{ href: '/analytics', label: 'Analytics' }

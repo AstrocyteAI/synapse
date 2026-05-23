@@ -314,3 +314,43 @@ export type CouncilStatus =
 	| 'scheduled'
 	| 'closed'
 	| 'failed';
+
+// ---------------------------------------------------------------------------
+// Chat-with-tools (Mode 4) — free-standing chat sessions with tool calling.
+// See docs/_design/chat.md §4a (Synapse) and docs/_design/chat-with-tools.md
+// (Cerebro). Wire contract: priv/contracts/chat-api-v1.openapi.json.
+// ---------------------------------------------------------------------------
+
+export interface AgentConfig {
+	model?: string;
+	tools?: string[];
+}
+
+export interface ChatSession {
+	id: string;
+	thread_id: string;
+	title: string;
+	status: 'active' | 'archived';
+	agent_config: AgentConfig;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface ListChatSessionsResponse {
+	data: ChatSession[];
+	next_before_id: string | null;
+}
+
+// Discriminated union over the SSE event types defined in chat-with-tools.md §3.
+export type ChatSseEvent =
+	| { type: 'session_started'; session_id: string; thread_id: string }
+	| { type: 'token'; content: string }
+	| { type: 'tool_call'; name: string; arguments: Record<string, unknown>; id: string }
+	| {
+			type: 'tool_result';
+			tool_call_id: string;
+			result?: unknown;
+			error?: string;
+	  }
+	| { type: 'message_complete'; thread_id: string }
+	| { type: 'error'; message: string };

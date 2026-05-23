@@ -1,7 +1,10 @@
 import type {
+	AgentConfig,
 	AuditLogFilters,
 	AuditLogResponse,
 	BackendInfo,
+	ChatSession,
+	ChatSseEvent,
 	ChatWithVerdictResponse,
 	CouncilDetail,
 	CouncilSummary,
@@ -12,6 +15,7 @@ import type {
 	DeviceTokenListResponse,
 	GraphNeighborsResponse,
 	GraphSearchResponse,
+	ListChatSessionsResponse,
 	MembersResponse,
 	MemorySearchResponse,
 	NotificationFeedResponse,
@@ -354,4 +358,152 @@ export async function getNotificationFeed(limit = 20): Promise<NotificationFeedR
 export async function getCentrifugoToken(): Promise<string> {
 	const data = await request<{ token: string }>('/v1/centrifugo/token');
 	return data.token;
+}
+
+// ---------------------------------------------------------------------------
+// Chat-with-tools (Mode 4) — free-standing chat sessions.
+//
+// Backend contract: priv/contracts/chat-api-v1.openapi.json.
+// SSE wire format documented in docs/_design/chat.md §4a (Synapse) and
+// docs/_design/chat-with-tools.md (Cerebro).
+// ---------------------------------------------------------------------------
+
+export interface CreateChatSessionInput {
+	title?: string;
+	agent_config?: AgentConfig;
+}
+
+export async function createChatSession(
+	input: CreateChatSessionInput = {}
+): Promise<ChatSession> {
+	return request('/v1/chat/sessions', {
+		method: 'POST',
+		body: JSON.stringify(input)
+	});
+}
+
+export interface ListChatSessionsInput {
+	status?: 'active' | 'archived' | 'all';
+	limit?: number;
+	before?: string;
+}
+
+export async function listChatSessions(
+	input: ListChatSessionsInput = {}
+): Promise<ListChatSessionsResponse> {
+	const qs = new URLSearchParams();
+	if (input.status) qs.set('status', input.status);
+	if (input.limit) qs.set('limit', String(input.limit));
+	if (input.before) qs.set('before', input.before);
+	const suffix = qs.toString() ? `?${qs}` : '';
+	// Don't go through unwrap() — the list response is itself an envelope
+	// ({data, next_before_id}), and Cerebro's request-wide envelope is the
+	// same shape, so unwrap would strip the inner data array.
+	const res = await fetch(`${API_BASE}/v1/chat/sessions${suffix}`, {
+		headers: authHeaders()
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => res.statusText);
+		throw new Error(`${res.status} ${text}`);
+	}
+	return (await res.json()) as ListChatSessionsResponse;
+}
+
+export async function getChatSession(id: string): Promise<ChatSession> {
+	return request(`/v1/chat/sessions/${id}`);
+}
+
+export interface UpdateChatSessionInput {
+	title?: string;
+	status?: 'active' | 'archived';
+	agent_config?: AgentConfig;
+}
+
+export async function updateChatSession(
+	id: string,
+	input: UpdateChatSessionInput
+): Promise<ChatSession> {
+	return request(`/v1/chat/sessions/${id}`, {
+		method: 'PATCH',
+		body: JSON.stringify(input)
+	});
+}
+
+/** Soft-delete: flips status to "archived", returns 204. */
+export async function archiveChatSession(id: string): Promise<void> {
+	const res = await fetch(`${API_BASE}/v1/chat/sessions/${id}`, {
+		method: 'DELETE',
+		headers: authHeaders() as Record<string, string>
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => res.statusText);
+		throw new Error(`${res.status} ${text}`);
+	}
+}
+
+/**
+ * POST /v1/chat/sessions/:id/messages — streams SSE events back as they
+ * arrive. The async generator yields one {@link ChatSseEvent} per server
+ * frame; the consumer dispatches on `event.type`.
+ *
+ * Callers should treat the absence of a final `message_complete` event as
+ * a failed turn — see chat.md §4a "Error semantics".
+ *
+ * Uses fetch + ReadableStream (not EventSource), because EventSource doesn't
+ * support custom headers — we need to attach the Bearer token.
+ */
+export async function* streamChatMessage(
+	sessionId: string,
+	content: string,
+	signal?: AbortSignal
+): AsyncGenerator<ChatSseEvent, void, unknown> {
+	const res = await fetch(`${API_BASE}/v1/chat/sessions/${sessionId}/messages`, {
+		method: 'POST',
+		headers: authHeaders(),
+		body: JSON.stringify({ content }),
+		signal
+	});
+	if (!res.ok) {
+		const text = await res.text().catch(() => res.statusText);
+		throw new Error(`${res.status} ${text}`);
+	}
+	if (!res.body) {
+		throw new Error('chat stream returned no body');
+	}
+
+	const reader = res.body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	try {
+		while (true) {
+			const { value, done } = await reader.read();
+			if (done) break;
+			buffer += decoder.decode(value, { stream: true });
+
+			// SSE frames are separated by a blank line ("\n\n"); each frame
+			// is one or more lines starting with "data: " whose payloads
+			// concatenate. We don't bother with `event:` / `id:` lines since
+			// the backend doesn't emit them.
+			let sep: number;
+			while ((sep = buffer.indexOf('\n\n')) !== -1) {
+				const frame = buffer.slice(0, sep);
+				buffer = buffer.slice(sep + 2);
+				const payload = frame
+					.split('\n')
+					.filter((l) => l.startsWith('data: '))
+					.map((l) => l.slice(6))
+					.join('');
+				if (!payload) continue;
+				try {
+					yield JSON.parse(payload) as ChatSseEvent;
+				} catch {
+					// Drop malformed frames silently — the contract is that
+					// each `data:` line is a single JSON object.
+				}
+			}
+		}
+	} finally {
+		reader.releaseLock();
+	}
 }
