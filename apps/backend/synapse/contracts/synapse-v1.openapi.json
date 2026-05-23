@@ -282,7 +282,7 @@
         "tags": [
           "Audit Logs"
         ],
-        "summary": "[Deprecated] List tenant audit logs \u2014 use /v1/admin/audit-log",
+        "summary": "[Deprecated] List tenant audit logs — use /v1/admin/audit-log",
         "deprecated": true,
         "security": [
           {
@@ -731,7 +731,7 @@
                   "red_team",
                   "deliberation"
                 ],
-                "description": "Council deliberation mode. `standard` = gather \u2192 rank \u2192 synthesise. `red_team` inserts one adversarial round between Stage 1 and Stage 2. `deliberation` runs the critique/revise loop up to 3 rounds."
+                "description": "Council deliberation mode. `standard` = gather → rank → synthesise. `red_team` inserts one adversarial round between Stage 1 and Stage 2. `deliberation` runs the critique/revise loop up to 3 rounds."
               }
             }
           }
