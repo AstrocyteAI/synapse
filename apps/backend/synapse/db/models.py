@@ -157,10 +157,15 @@ class ThreadEventType(StrEnum):
     # priv/contracts/thread-events-v2.schema.json — both backends agree on
     # this enum string set; migration bundle imports round-trip.
     #
-    # Edit / regen / fork events ship in a later commit; the agent loop
-    # commit only needs tool_call + tool_result.
     tool_call = "tool_call"
     tool_result = "tool_result"
+
+    # Mode 4 conversation editing (Phase 1B). Lock-stepped with
+    # priv/contracts/thread-events-v2.schema.json and the Cerebro
+    # `Synapse.Schemas.ThreadEvent` enum.
+    message_edited = "message_edited"
+    message_regenerated = "message_regenerated"
+    conversation_forked = "conversation_forked"
 
 
 class Thread(Base):
