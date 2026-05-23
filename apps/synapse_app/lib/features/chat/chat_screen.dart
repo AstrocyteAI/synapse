@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
 import '../../core/realtime/realtime_client.dart';
+import '../../widgets/live_status_banner.dart';
 import '../../widgets/thread_entry.dart';
 import '../../widgets/directive_input.dart';
 
@@ -213,6 +214,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     return Column(
       children: [
+        LiveStatusBanner(client: widget.client, councilId: widget.sessionId),
         Expanded(
           child: ListView.builder(
             controller: _scrollController,

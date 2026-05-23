@@ -8,6 +8,7 @@
 	import ChatInput from '$lib/components/chat/ChatInput.svelte';
 	import VerdictCard from '$lib/components/council/VerdictCard.svelte';
 	import DeliberationRoundsCard from '$lib/components/council/DeliberationRoundsCard.svelte';
+	import LiveStatusBanner from '$lib/components/council/LiveStatusBanner.svelte';
 	import type { CouncilDetail } from '$lib/api/types';
 
 	const sessionId = $page.params.id!;
@@ -216,6 +217,10 @@
 				</div>
 			</div>
 		{/if}
+
+		<div class="shrink-0 px-5 pt-3">
+			<LiveStatusBanner councilId={sessionId} />
+		</div>
 
 		{#if council.status === 'closed' && council.verdict}
 			<div class="shrink-0 border-b border-zinc-800 px-5 py-4">
