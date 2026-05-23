@@ -149,6 +149,126 @@ def test_create_council_requires_auth(client):
     assert resp.status_code == 401
 
 
+def test_create_council_accepts_settings_alias_for_config(client, db_session, headers):
+    """`settings` is the canonical wire field for the council config map
+    (Cerebro's name); Synapse accepts it as an alias for the legacy
+    `config` field. Both names must reach `request.config` internally.
+    """
+    captured: dict = {}
+
+    async def fake_create_session(**kwargs):
+        captured["config"] = kwargs["request"].config
+        captured["council_type"] = kwargs["request"].council_type
+        return _make_council_session(id=uuid.uuid4(), status=CouncilStatus.pending)
+
+    mock_thread = MagicMock()
+    mock_thread.id = uuid.uuid4()
+
+    with (
+        patch("synapse.routers.councils.asyncio.create_task"),
+        patch(
+            "synapse.routers.councils.create_session",
+            new=AsyncMock(side_effect=fake_create_session),
+        ),
+        patch("synapse.routers.councils.create_thread", new=AsyncMock(return_value=mock_thread)),
+        patch(
+            "synapse.routers.councils.append_event",
+            new=AsyncMock(return_value=_make_thread_event(thread_id=mock_thread.id)),
+        ),
+    ):
+        resp = client.post(
+            "/v1/councils",
+            json={
+                "question": "Q?",
+                "settings": {"mode": "deliberation", "x": 1},
+            },
+            headers=headers,
+        )
+
+    assert resp.status_code == 202
+    assert captured["config"] == {"mode": "deliberation", "x": 1}
+
+
+def test_create_council_promotes_settings_mode_red_team_to_council_type(
+    client, db_session, headers
+):
+    """`settings.mode == "red_team"` is the canonical Cerebro-parity opt-in.
+    Synapse's orchestrator branches on top-level `council_type`, so the
+    create endpoint promotes the mode into that field automatically.
+    """
+    captured: dict = {}
+
+    async def fake_create_session(**kwargs):
+        captured["council_type"] = kwargs["request"].council_type
+        return _make_council_session(id=uuid.uuid4(), status=CouncilStatus.pending)
+
+    mock_thread = MagicMock()
+    mock_thread.id = uuid.uuid4()
+
+    with (
+        patch("synapse.routers.councils.asyncio.create_task"),
+        patch(
+            "synapse.routers.councils.create_session",
+            new=AsyncMock(side_effect=fake_create_session),
+        ),
+        patch("synapse.routers.councils.create_thread", new=AsyncMock(return_value=mock_thread)),
+        patch(
+            "synapse.routers.councils.append_event",
+            new=AsyncMock(return_value=_make_thread_event(thread_id=mock_thread.id)),
+        ),
+    ):
+        resp = client.post(
+            "/v1/councils",
+            json={"question": "Q?", "settings": {"mode": "red_team"}},
+            headers=headers,
+        )
+
+    assert resp.status_code == 202
+    assert captured["council_type"] == "red_team"
+
+
+def test_create_council_does_not_override_explicit_council_type(client, db_session, headers):
+    """If the caller already passes `council_type` explicitly, the mode-
+    promotion logic must not overwrite it. (Belt-and-braces for clients
+    that send both during the deprecation window.)
+    """
+    captured: dict = {}
+
+    async def fake_create_session(**kwargs):
+        captured["council_type"] = kwargs["request"].council_type
+        return _make_council_session(id=uuid.uuid4(), status=CouncilStatus.pending)
+
+    mock_thread = MagicMock()
+    mock_thread.id = uuid.uuid4()
+
+    with (
+        patch("synapse.routers.councils.asyncio.create_task"),
+        patch(
+            "synapse.routers.councils.create_session",
+            new=AsyncMock(side_effect=fake_create_session),
+        ),
+        patch("synapse.routers.councils.create_thread", new=AsyncMock(return_value=mock_thread)),
+        patch(
+            "synapse.routers.councils.append_event",
+            new=AsyncMock(return_value=_make_thread_event(thread_id=mock_thread.id)),
+        ),
+    ):
+        resp = client.post(
+            "/v1/councils",
+            json={
+                "question": "Q?",
+                "council_type": "async",  # explicit, must win
+                "settings": {"mode": "red_team"},
+            },
+            headers=headers,
+        )
+
+    assert resp.status_code == 202
+    # `async` is preserved — the mode-promotion only fires when the caller
+    # left council_type at the default "llm".
+    assert captured["council_type"] == "async"
+
+
 def test_create_council_validates_question(client, headers):
     resp = client.post("/v1/councils", json={}, headers=headers)
     assert resp.status_code == 422

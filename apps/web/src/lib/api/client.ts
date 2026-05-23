@@ -104,16 +104,15 @@ export async function createCouncil(
 	templateId?: string,
 	mode: import('./types').CouncilMode = 'standard'
 ): Promise<CreateCouncilResponse> {
-	// Backend opt-in is asymmetric: Synapse OSS gates red team on a top-level
-	// `council_type` field; Cerebro on `settings.mode`. We send both — each
-	// backend ignores the unrecognised one — so the same client payload works
-	// against either backend. Standard mode sends neither (keeps the request
-	// body small for the common case).
+	// Canonical opt-in for red team / deliberation is `settings.mode`. Both
+	// backends accept it: Cerebro reads `settings.mode` directly; Synapse
+	// accepts `settings` as an alias for its internal `config` field and
+	// promotes `settings.mode == "red_team"` into the legacy `council_type`
+	// field server-side. Standard mode omits the settings block entirely.
 	const body: Record<string, unknown> = { question };
 	if (templateId) body.template_id = templateId;
 	if (mode !== 'standard') {
-		body.council_type = mode; // Synapse OSS contract
-		body.settings = { mode }; // Cerebro contract
+		body.settings = { mode };
 	}
 	return request('/v1/councils', {
 		method: 'POST',

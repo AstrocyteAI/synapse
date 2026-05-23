@@ -109,13 +109,12 @@ class SynapseApiClient {
     final body = <String, dynamic>{'question': question};
     if (templateId != null) body['template_id'] = templateId;
     if (councilType != null) body['council_type'] = councilType;
-    // Backend opt-in is asymmetric: Synapse OSS gates red-team / multi-round
-    // on a top-level `council_type` field; Cerebro on `settings.mode`. Send
-    // both — each backend ignores the unrecognised one — so the same call
-    // works against either backend. `councilType` (when explicitly passed)
-    // takes precedence over the mode-derived `council_type`.
+    // Canonical opt-in for red team / deliberation is `settings.mode`. Both
+    // backends accept it: Cerebro reads it directly; Synapse accepts
+    // `settings` as an alias for its internal `config` field and promotes
+    // `settings.mode == "red_team"` into the legacy `council_type` field
+    // server-side. Standard mode omits the settings block entirely.
     if (mode != CouncilMode.standard) {
-      body['council_type'] ??= mode.wire;
       body['settings'] = {'mode': mode.wire};
     }
 

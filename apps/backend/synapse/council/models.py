@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class CouncilMember(BaseModel):
@@ -18,13 +18,24 @@ class CouncilMember(BaseModel):
 
 
 class CreateCouncilRequest(BaseModel):
+    # Allow both the internal Python attribute name (`config`) and the
+    # canonical wire field (`settings`) on input. Cerebro's create payload
+    # uses `settings`; Synapse historically used `config`. Accepting both
+    # via `validation_alias` lets one client payload target either backend.
+    model_config = ConfigDict(populate_by_name=True)
+
     question: str
     members: list[CouncilMember] | None = None  # uses defaults if None
     chairman: CouncilMember | None = None  # uses default if None
     council_type: str = "llm"
     template_id: str | None = None
     topic_tag: str | None = None
-    config: dict[str, Any] = Field(default_factory=dict)
+    # Wire name: `settings` (canonical) or `config` (legacy alias).
+    # Internal attribute name stays `config` to avoid touching every caller.
+    config: dict[str, Any] = Field(
+        default_factory=dict,
+        validation_alias=AliasChoices("config", "settings"),
+    )
     # B3 — async councils
     quorum: int | None = None  # min contributions before Stage 2 fires; None = all members
     contribution_deadline_hours: float | None = None  # forced resume after N hours

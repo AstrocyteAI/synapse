@@ -122,6 +122,19 @@ async def create_council(
 ) -> dict:
     settings = request.app.state.settings
 
+    # Canonical opt-in for red team / deliberation modes is `settings.mode`
+    # (Cerebro's field; Synapse accepts it as an alias for `config` via
+    # `CreateCouncilRequest`). Promote the mode into the existing
+    # `council_type` field for red team — Synapse's orchestrator branches
+    # on that to take the adversarial path. `mode="deliberation"` is a
+    # no-op here: Synapse runs the critique/revise loop by default for any
+    # ≥2-member non-solo council when `deliberation_enabled` is set
+    # globally (see config.py + orchestrator.py:155). `mode="standard"`
+    # is the default and needs no override.
+    if (mode := body.config.get("mode")) == "red_team" and body.council_type == "llm":
+        body.council_type = "red_team"
+    _ = mode  # explicit binding for the walrus assignment
+
     # Template resolution — apply before member/chairman fallbacks so that
     # explicit request fields always win over template defaults.
     body = _apply_template(body)

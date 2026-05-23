@@ -721,7 +721,19 @@
           },
           "settings": {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "description": "Generic per-council config map. Canonical mode opt-in: `mode: \"standard\" | \"red_team\" | \"deliberation\"`. Other keys passed through.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "standard",
+                  "red_team",
+                  "deliberation"
+                ],
+                "description": "Council deliberation mode. `standard` = gather \u2192 rank \u2192 synthesise. `red_team` inserts one adversarial round between Stage 1 and Stage 2. `deliberation` runs the critique/revise loop up to 3 rounds."
+              }
+            }
           }
         },
         "required": [
