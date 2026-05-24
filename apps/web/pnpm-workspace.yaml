@@ -1,5 +1,13 @@
-ignoredBuiltDependencies:
-  - protobufjs
-
+# pnpm 10+ refuses to run install scripts from transitive deps unless
+# allowlisted here (or in `package.json`'s `pnpm.onlyBuiltDependencies`,
+# but pnpm-workspace.yaml takes precedence for workspace-wide settings
+# so this is the canonical location).
+#
+# - esbuild: postinstall compiles the native binary for the host arch.
+# - protobufjs: pulled in by `centrifuge`; postinstall compiles
+#   descriptors. Without this, CI's `pnpm install --frozen-lockfile`
+#   exits non-zero with ERR_PNPM_IGNORED_BUILDS and the web Docker
+#   build fails.
 onlyBuiltDependencies:
   - esbuild
+  - protobufjs

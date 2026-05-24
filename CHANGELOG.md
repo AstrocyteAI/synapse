@@ -7,6 +7,16 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Web Docker build broken by stale `pnpm-workspace.yaml`.** The v0.2.1
+  fix landed `pnpm.onlyBuiltDependencies` in `apps/web/package.json`,
+  but pnpm 10.4+ reads workspace-wide build-script allowlists from
+  `pnpm-workspace.yaml` first and that file had `protobufjs` in
+  `ignoredBuiltDependencies` — explicitly suppressing it. Moved
+  `protobufjs` into `onlyBuiltDependencies` and dropped the now-redundant
+  `pnpm` block from `package.json`.
+
 ## [0.2.1] — 2026-05-24
 
 Patch release — CI unblock + build-tooling polish that landed shortly
