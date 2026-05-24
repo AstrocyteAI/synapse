@@ -7,15 +7,22 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-05-24
+
+Patch release — follow-up to v0.2.1; the v0.2.1 web-build fix was in
+the wrong file and didn't actually unblock CI.
+
 ### Fixed
 
-- **Web Docker build broken by stale `pnpm-workspace.yaml`.** The v0.2.1
-  fix landed `pnpm.onlyBuiltDependencies` in `apps/web/package.json`,
-  but pnpm 10.4+ reads workspace-wide build-script allowlists from
+- **Web Docker build still broken after v0.2.1 — fixed in
+  `pnpm-workspace.yaml` this time.** v0.2.1 landed
+  `pnpm.onlyBuiltDependencies` in `apps/web/package.json`, but pnpm
+  10.4+ reads workspace-wide build-script allowlists from
   `pnpm-workspace.yaml` first and that file had `protobufjs` in
-  `ignoredBuiltDependencies` — explicitly suppressing it. Moved
-  `protobufjs` into `onlyBuiltDependencies` and dropped the now-redundant
-  `pnpm` block from `package.json`.
+  `ignoredBuiltDependencies` — explicitly suppressing it, so the
+  package.json entry was a no-op. Moved `protobufjs` into
+  `onlyBuiltDependencies` in `pnpm-workspace.yaml` and dropped the
+  dead `pnpm` block from `package.json`.
 
 ## [0.2.1] — 2026-05-24
 
@@ -119,7 +126,8 @@ async councils and mobile push.
 
 Initial release.
 
-[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/AstrocyteAI/synapse/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AstrocyteAI/synapse/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AstrocyteAI/synapse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AstrocyteAI/synapse/releases/tag/v0.1.0
