@@ -7,6 +7,30 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.4] — 2026-05-24
+
+Third (and hopefully final) follow-up to v0.2.1's web-build break.
+
+### Fixed
+
+- **`pnpm install --frozen-lockfile` still rejected `protobufjs` in CI**
+  even after v0.2.3 copied `pnpm-workspace.yaml` into the build
+  context. Root cause: `npm install -g pnpm` was pulling a pnpm
+  version (10.16+ / 11.x) that escalated unallowlisted transitive
+  build scripts from a warning to a fatal `ERR_PNPM_IGNORED_BUILDS`.
+  Fixed by pinning pnpm to 10.13.1 (warning-only behavior) via
+  corepack:
+  - **`package.json`** declares `"packageManager": "pnpm@10.13.1"`.
+  - **`Dockerfile`** switches `npm install -g pnpm` → `corepack enable`
+    so the pinned version activates deterministically.
+  - Verified locally: `docker build --target builder` is green and the
+    activated pnpm version inside the image is 10.13.1.
+
+  If you bump the pin past the strictness change, you'll also need to
+  regenerate `pnpm-lock.yaml` so its `settings.onlyBuiltDependencies`
+  snapshot includes `protobufjs` (and `esbuild`) — `pnpm-workspace.yaml`
+  alone isn't enough under `--frozen-lockfile`.
+
 ## [0.2.3] — 2026-05-24
 
 Patch release — second follow-up to v0.2.1. v0.2.2 moved `protobufjs`
@@ -141,7 +165,8 @@ async councils and mobile push.
 
 Initial release.
 
-[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/AstrocyteAI/synapse/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/AstrocyteAI/synapse/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/AstrocyteAI/synapse/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AstrocyteAI/synapse/compare/v0.2.0...v0.2.1
