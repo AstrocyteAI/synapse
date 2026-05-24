@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-05-24
+
+Patch release — second follow-up to v0.2.1. v0.2.2 moved `protobufjs`
+into `pnpm-workspace.yaml`'s `onlyBuiltDependencies`, but the web
+Dockerfile didn't COPY that file into the build context, so pnpm
+still saw no allowlist and the build kept failing with the same
+`ERR_PNPM_IGNORED_BUILDS`.
+
+### Fixed
+
+- **`apps/web/Dockerfile` now copies `pnpm-workspace.yaml`** alongside
+  `package.json` + `pnpm-lock.yaml` before `pnpm install`. Without it,
+  the workspace-level `onlyBuiltDependencies` allowlist from v0.2.2
+  was simply absent during the Docker build.
+
 ## [0.2.2] — 2026-05-24
 
 Patch release — follow-up to v0.2.1; the v0.2.1 web-build fix was in
@@ -126,7 +141,8 @@ async councils and mobile push.
 
 Initial release.
 
-[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/AstrocyteAI/synapse/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/AstrocyteAI/synapse/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/AstrocyteAI/synapse/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AstrocyteAI/synapse/compare/v0.1.0...v0.2.0

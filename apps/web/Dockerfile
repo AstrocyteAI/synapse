@@ -3,7 +3,12 @@ WORKDIR /app
 
 RUN npm install -g pnpm
 
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml carries the `onlyBuiltDependencies` allowlist
+# (protobufjs needs its postinstall to compile descriptors). Without
+# it in the build context, pnpm 10+ exits with ERR_PNPM_IGNORED_BUILDS.
+# Also pin a known-good pnpm via packageManager / corepack later if
+# this drifts again.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
