@@ -4,7 +4,9 @@
 	import { getNotificationFeed } from '$lib/api/client';
 	import { backendStore } from '$lib/stores/backend.svelte';
 	import { authStore } from '$lib/stores/auth.svelte';
+	import { toasts } from '$lib/stores/toasts.svelte';
 	import BackendBadge from '$lib/components/BackendBadge.svelte';
+	import ToastHost from '$lib/components/ToastHost.svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -27,13 +29,51 @@
 
 	let unreadCount = $state(0);
 
+	// Awaited-toast bookkeeping (Slice 3.5 follow-on). We track previously-
+	// seen `awaited_contribution` council ids in-process so the toast only
+	// fires the first time a council shows up in the feed — subsequent
+	// polls of the same council don't re-spam. Reset on logout.
+	//
+	// First poll after a fresh load is a special case: there's no prior
+	// state, so EVERY awaited item would look "new" and dump a stack of
+	// toasts on the user. The `bootstrapped` flag skips toasting on that
+	// first pass — we still seed the set so subsequent polls only fire
+	// for genuinely new entries.
+	let seenAwaitedIds = new Set<string>();
+	let bootstrapped = false;
+
 	async function refreshUnreadCount() {
-		if (!getToken()) return;
+		if (!getToken()) {
+			seenAwaitedIds = new Set();
+			bootstrapped = false;
+			return;
+		}
 		try {
 			const feed = await getNotificationFeed(20);
 			const lastSeen = localStorage.getItem(LAST_SEEN_KEY);
 			const cutoff = lastSeen ? new Date(lastSeen) : new Date(0);
 			unreadCount = feed.items.filter((item) => new Date(item.occurred_at) > cutoff).length;
+
+			// Detect newly-arrived awaited councils → fire one toast each.
+			const awaited = feed.items.filter((it) => it.type === 'awaited_contribution');
+			if (bootstrapped) {
+				for (const item of awaited) {
+					if (!seenAwaitedIds.has(item.council_id)) {
+						seenAwaitedIds.add(item.council_id);
+						toasts.push({
+							tone: 'awaited',
+							title: "You're awaited on a council",
+							body: item.question,
+							href: `/councils/${item.council_id}`,
+							ttlMs: 12_000
+						});
+					}
+				}
+			} else {
+				// First poll — seed the cache, suppress toasts.
+				for (const item of awaited) seenAwaitedIds.add(item.council_id);
+				bootstrapped = true;
+			}
 		} catch {
 			// silently ignore — bell is best-effort
 		}
@@ -163,3 +203,11 @@
 		{@render children()}
 	</main>
 </div>
+
+<!--
+	Toast host — mounted once at the layout root so any caller (polling
+	loops, mutation handlers) can `toasts.push(...)` and have it land
+	above whatever page is rendered. Currently fires for new
+	`awaited_contribution` feed items detected by `refreshUnreadCount`.
+-->
+<ToastHost />

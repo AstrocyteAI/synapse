@@ -1,15 +1,32 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { listCouncils } from '$lib/api/client';
+	import { getNotificationFeed, listCouncils } from '$lib/api/client';
 	import type { CouncilSummary, CouncilStatus } from '$lib/api/types';
 
 	let councils = $state<CouncilSummary[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 
+	// Council ids where the current user is the AWAITED human (Slice 3.5).
+	// Derived from the notifications feed — that's already principal-scoped
+	// server-side, so we avoid duplicating the "is this council waiting on
+	// me?" check on the client.
+	let awaitedIds = $state<Set<string>>(new Set());
+
 	onMount(async () => {
 		try {
-			councils = await listCouncils();
+			// Fire both in parallel — the awaited badge is a nice-to-have, so
+			// a feed-fetch failure must not block the council list render.
+			const [list, feed] = await Promise.all([
+				listCouncils(),
+				getNotificationFeed(50).catch(() => ({ items: [], count: 0 }))
+			]);
+			councils = list;
+			awaitedIds = new Set(
+				feed.items
+					.filter((item) => item.type === 'awaited_contribution')
+					.map((item) => item.council_id)
+			);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Failed to load councils';
 		} finally {
@@ -85,13 +102,29 @@
 	{:else}
 		<ul class="flex flex-col gap-2">
 			{#each councils as council (council.session_id)}
+				{@const awaited = awaitedIds.has(council.session_id)}
 				<li>
 					<a
 						href="/councils/{council.session_id}"
-						class="flex items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 hover:border-zinc-700 transition-colors"
+						class="flex items-start gap-3 rounded-xl border px-4 py-3 transition-colors {awaited
+							? 'border-rose-700/60 bg-rose-950/20 hover:border-rose-600'
+							: 'border-zinc-800 bg-zinc-900 hover:border-zinc-700'}"
 					>
 						<div class="flex-1 min-w-0">
-							<p class="truncate text-sm font-medium text-zinc-100">{council.question}</p>
+							<div class="flex items-center gap-2">
+								<p class="truncate text-sm font-medium text-zinc-100">{council.question}</p>
+								{#if awaited}
+									<!-- "You're awaited" pip — colour matches the
+									     awaited_contribution row on /notifications
+									     so the two surfaces share a visual language. -->
+									<span
+										class="shrink-0 rounded-full bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-rose-300"
+										aria-label="You are awaited on this council"
+									>
+										Awaiting you
+									</span>
+								{/if}
+							</div>
 							<p class="mt-0.5 text-xs text-zinc-500">{relativeTime(council.created_at)}</p>
 						</div>
 						<span class="mt-0.5 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium {statusColour[council.status as CouncilStatus] ?? 'text-zinc-400 bg-zinc-800'}">

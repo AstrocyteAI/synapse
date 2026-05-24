@@ -69,6 +69,13 @@
 				return { label: 'Needs approval', dot: 'bg-amber-500', badge: 'bg-amber-500/15 text-amber-400' };
 			case 'summon_requested':
 				return { label: 'Your contribution needed', dot: 'bg-indigo-500', badge: 'bg-indigo-500/15 text-indigo-400' };
+			case 'awaited_contribution':
+				// Distinct from `summon_requested` — that's the operator-voice
+				// ("your council is waiting for humans"); this one is the
+				// participant-voice ("you are one of those humans"). Hotter
+				// colour to reflect that an action is required of THIS user
+				// rather than someone-else they invited.
+				return { label: "You're awaited", dot: 'bg-rose-500', badge: 'bg-rose-500/15 text-rose-300' };
 			case 'in_progress':
 				return { label: 'In progress', dot: 'bg-zinc-500', badge: 'bg-zinc-700 text-zinc-400' };
 			default:
@@ -171,7 +178,7 @@
 							>
 								View council →
 							</a>
-							{#if item.type === 'summon_requested'}
+							{#if item.type === 'summon_requested' || item.type === 'awaited_contribution'}
 								<a
 									href="/councils/{item.council_id}"
 									class="text-amber-400 hover:text-amber-300"
