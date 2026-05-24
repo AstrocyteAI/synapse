@@ -7,6 +7,21 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-05-24
+
+Patch release — CI unblock + build-tooling polish that landed shortly
+after v0.2.0 but wasn't captured in its notes.
+
+### Fixed
+
+- **Web Docker build broken by pnpm v10+ install-script protection.**
+  pnpm 10 refuses to run install scripts from transitive dependencies
+  unless allowlisted; `protobufjs` (pulled in by `centrifuge`) needs
+  its install script to compile descriptors. Added
+  `"pnpm": { "onlyBuiltDependencies": ["protobufjs"] }` to
+  `apps/web/package.json` so CI's `pnpm install --frozen-lockfile`
+  succeeds.
+
 ### Changed
 
 - **Web: build version derived from git tag.** `vite.config.ts` injects a
@@ -94,6 +109,7 @@ async councils and mobile push.
 
 Initial release.
 
-[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/AstrocyteAI/synapse/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/AstrocyteAI/synapse/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/AstrocyteAI/synapse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AstrocyteAI/synapse/releases/tag/v0.1.0
