@@ -330,7 +330,12 @@ export type FeedItemType =
 	| 'verdict_ready'
 	| 'pending_approval'
 	| 'in_progress'
-	| 'summon_requested';
+	| 'summon_requested'
+	// Cerebro-only, added by async-councils Slice 3.5 — fires when the
+	// current user is a `member_type: "human"` member of a council that
+	// is parked in `waiting_contributions`. The "voice" distinguishes it
+	// from `summon_requested`, which surfaces to the COUNCIL CREATOR.
+	| 'awaited_contribution';
 
 export interface FeedItem {
 	type: FeedItemType;
@@ -383,6 +388,24 @@ export interface ListChatSessionsResponse {
 	data: ChatSession[];
 	next_before_id: string | null;
 }
+
+// Workspace user directory — populates the chat-input `@mention` picker
+// for adding human members to async councils. Aggregated from
+// recently-active principals server-side (no users table); see Cerebro's
+// Synapse.WorkspaceUsers module for the rationale.
+export interface WorkspaceUser {
+	id: string; // stable principal id, e.g. "user:alice"
+	display_name: string; // prefix-stripped label for UI
+	last_seen_at: string | null; // ISO 8601
+}
+
+// A pending human collected from the @mention picker before the user
+// submits a chat message. Either `sub` (workspace user) OR `email`
+// (external invitee) is set, never both. Becomes the `humans` arg on the
+// synapse_council_start tool call (see Slice 3c).
+export type PendingHuman =
+	| { kind: 'workspace'; name: string; sub: string }
+	| { kind: 'invite'; name: string; email: string };
 
 // Discriminated union over the SSE event types defined in chat-with-tools.md §3.
 export type ChatSseEvent =

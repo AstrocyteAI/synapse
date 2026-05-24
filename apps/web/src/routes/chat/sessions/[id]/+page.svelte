@@ -10,7 +10,8 @@
 		regenerateChatMessage,
 		streamChatMessage
 	} from '$lib/api/client';
-	import type { ChatSession, ChatSseEvent, ThreadEvent } from '$lib/api/types';
+	import type { ChatSession, ChatSseEvent, PendingHuman, ThreadEvent } from '$lib/api/types';
+	import ChatInput from '$lib/components/chat/ChatInput.svelte';
 
 	// `$page.params.id` is typed as `string | undefined` because params is a
 	// generic record; on this route the dynamic segment is always present.
@@ -56,13 +57,15 @@
 		}
 	});
 
-	async function send() {
-		const content = inputValue.trim();
-		if (!content || sending || !session) return;
+	async function send(content: string, humans: PendingHuman[] = []) {
+		const trimmed = content.trim();
+		if (!trimmed || sending || !session) return;
+		// ChatInput clears itself on submit; mirror that for the legacy
+		// `inputValue` state which other code paths may still read.
 		inputValue = '';
 		await runTurn({
-			userBubble: content,
-			stream: streamChatMessage(session.id, content)
+			userBubble: trimmed,
+			stream: streamChatMessage(session.id, trimmed, humans)
 		});
 	}
 
@@ -366,29 +369,21 @@
 			{/if}
 		</div>
 
-		<form
-			class="mt-4 flex gap-2"
-			onsubmit={(e) => {
-				e.preventDefault();
-				send();
-			}}
-		>
-			<input
-				type="text"
-				bind:value={inputValue}
-				disabled={sending || session.status === 'archived'}
-				placeholder={session.status === 'archived'
-					? 'This chat is archived'
-					: 'Type a message…'}
-				class="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-indigo-600 focus:outline-none disabled:opacity-50"
+		<!--
+			ChatInput owns the @mention picker (async-council human members)
+			+ the directive picker. `showMentions` is on here because this is
+			the chat-with-tools surface where council_start can fire; it's
+			intentionally off on the council-detail and landing-page inputs
+			where the picker would have no agent to dispatch to.
+		-->
+		<div class="mt-4">
+			<ChatInput
+				placeholder={session.status === 'archived' ? 'This chat is archived' : 'Type a message…'}
+				submitting={sending}
+				disabled={session.status === 'archived'}
+				showMentions={true}
+				onsubmit={send}
 			/>
-			<button
-				type="submit"
-				disabled={sending || !inputValue.trim() || session.status === 'archived'}
-				class="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50 transition"
-			>
-				{sending ? '…' : 'Send'}
-			</button>
-		</form>
+		</div>
 	{/if}
 </div>

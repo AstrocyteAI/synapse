@@ -25,7 +25,8 @@ import type {
 	Template,
 	ThreadEventsResponse,
 	TopicsResponse,
-	VelocityResponse
+	VelocityResponse,
+	WorkspaceUser
 } from './types';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
@@ -145,6 +146,25 @@ export async function approveCouncil(
 		method: 'POST',
 		body: JSON.stringify({})
 	});
+}
+
+// ---------------------------------------------------------------------------
+// Workspace users (Cerebro-only — Synapse OSS doesn't expose this yet).
+// Used by the chat-input @mention picker. The backend aggregates
+// recently-active principals; the response carries display_name +
+// last_seen_at for ranking.
+// ---------------------------------------------------------------------------
+
+export async function listWorkspaceUsers(
+	q?: string,
+	limit = 25
+): Promise<WorkspaceUser[]> {
+	const params = new URLSearchParams({ limit: String(limit) });
+	if (q && q.trim()) params.set('q', q.trim());
+	// Cerebro returns {data: WorkspaceUser[]} which request() unwraps when
+	// VITE_IS_CEREBRO=true; Synapse OSS would 404 today (no parity yet) —
+	// callers handle that as "no directory available, email-only path".
+	return request(`/v1/workspace/users?${params}`);
 }
 
 export async function contributeToCouncil(
@@ -528,9 +548,22 @@ async function* streamSse(
 export function streamChatMessage(
 	sessionId: string,
 	content: string,
+	humans: import('./types').PendingHuman[] = [],
 	signal?: AbortSignal
 ): AsyncGenerator<ChatSseEvent, void, unknown> {
-	return streamSse(`/v1/chat/sessions/${sessionId}/messages`, { content }, signal);
+	// `humans` carries any @-mentioned contributors from the ChatInput
+	// picker. The backend merges them with whatever the LLM emits in the
+	// synapse_council_start tool call args — picker is ground truth, the
+	// LLM's text framing is just how the user asked.
+	const body: Record<string, unknown> = { content };
+	if (humans.length > 0) {
+		body.humans = humans.map((h) =>
+			h.kind === 'workspace'
+				? { name: h.name, sub: h.sub }
+				: { name: h.name, email: h.email }
+		);
+	}
+	return streamSse(`/v1/chat/sessions/${sessionId}/messages`, body, signal);
 }
 
 // ---------------------------------------------------------------------------

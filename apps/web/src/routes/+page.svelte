@@ -38,7 +38,10 @@
 		}
 	});
 
-	async function handleSubmit(content: string) {
+	// `humans` is wired to the chat-with-tools agent in Slice 3c; this
+	// landing-page form is the legacy "make a sync council" path and
+	// doesn't use the @mention picker (showMentions defaults to false).
+	async function handleSubmit(content: string, _humans: unknown[] = []) {
 		submitting = true;
 		error = '';
 		try {

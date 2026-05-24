@@ -76,7 +76,10 @@
 		clearThread();
 	});
 
-	async function handleSend(content: string) {
+	// `humans` only matters for the chat-with-tools surface (Slice 3c) —
+	// this council-detail input ships contributions for an already-running
+	// council and has no use for an @mention picker.
+	async function handleSend(content: string, _humans: unknown[] = []) {
 		if (!threadId) return;
 		sending = true;
 		sendError = '';
