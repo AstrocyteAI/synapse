@@ -309,10 +309,36 @@ def test_register_device_validates_token_type(_wired_client, headers, app):
     _enable_feature(application)
     resp = c.post(
         "/v1/notifications/devices",
-        json={"token_type": "fcm", "token": "device-token"},
+        json={"token_type": "invalid", "token": "device-token"},
         headers=headers,
     )
     assert resp.status_code == 422
+
+
+def test_register_device_accepts_fcm(_wired_client, headers, app, db_session):
+    c, _, application = _wired_client
+    _enable_feature(application)
+    db_session.commit = AsyncMock()
+    db_session.add = MagicMock()
+
+    async def _refresh(obj):
+        obj.id = uuid.uuid4()
+        obj.token_type = "fcm"
+        obj.token = "fcm-device-token"
+        obj.device_label = None
+        from datetime import UTC, datetime
+
+        obj.created_at = datetime.now(UTC)
+
+    db_session.refresh = _refresh
+
+    resp = c.post(
+        "/v1/notifications/devices",
+        json={"token_type": "fcm", "token": "fcm-device-token"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["token_type"] == "fcm"
 
 
 def test_register_device_requires_token(_wired_client, headers, app):

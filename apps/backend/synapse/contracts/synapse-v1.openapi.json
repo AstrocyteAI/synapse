@@ -1029,7 +1029,9 @@
           "token_type": {
             "type": "string",
             "enum": [
-              "ntfy"
+              "ntfy",
+              "fcm",
+              "apns"
             ]
           },
           "token": {
@@ -1058,7 +1060,9 @@
           "token_type": {
             "type": "string",
             "enum": [
-              "ntfy"
+              "ntfy",
+              "fcm",
+              "apns"
             ],
             "default": "ntfy"
           },

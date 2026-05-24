@@ -80,6 +80,16 @@ class Settings(BaseSettings):
     ntfy_url: str = ""  # e.g. https://ntfy.sh or http://ntfy.internal:2586
     ntfy_token: str = ""  # optional Bearer token for authenticated ntfy topics
 
+    # FCM — Firebase Cloud Messaging HTTP v1 (Android + iOS via Firebase relay)
+    fcm_service_account_json: str = ""  # full Google service-account JSON
+
+    # APNs direct — native iOS device tokens (token_type='apns')
+    apns_key_id: str = ""
+    apns_team_id: str = ""
+    apns_key: str = ""  # .p8 PEM contents
+    apns_bundle_id: str = ""
+    apns_use_sandbox: bool = False
+
     # --- EE ---
     synapse_license_key: str | None = None
     synapse_license_key_offline: str | None = None

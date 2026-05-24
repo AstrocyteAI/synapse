@@ -179,7 +179,7 @@ async def test_ntfy_not_sent_when_disabled():
     prefs = _make_prefs(ntfy_enabled=False)
     db = AsyncMock()
 
-    await dispatcher._try_ntfy(prefs, "user-1", "Subject", "Body", db)
+    await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
     db.execute.assert_not_called()
 
 
@@ -188,9 +188,17 @@ async def test_ntfy_not_sent_when_url_not_configured():
     dispatcher = _make_dispatcher(ntfy_url="")
     prefs = _make_prefs(ntfy_enabled=True)
     db = AsyncMock()
+    devices = [_make_device("topic-a")]
+    db.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=devices)))
+        )
+    )
 
-    await dispatcher._try_ntfy(prefs, "user-1", "Subject", "Body", db)
-    db.execute.assert_not_called()
+    with patch("synapse.notifications.dispatcher.send_ntfy", new=AsyncMock()) as mock_ntfy:
+        await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
+
+    mock_ntfy.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -205,13 +213,42 @@ async def test_ntfy_sends_to_all_devices():
         )
     )
 
-    with patch("synapse.notifications.ntfy.httpx") as _:
-        dispatcher._http.post = AsyncMock(
-            return_value=MagicMock(status_code=200, raise_for_status=MagicMock())
-        )
-        await dispatcher._try_ntfy(prefs, "user-1", "Subject", "Body", db)
+    with patch("synapse.notifications.dispatcher.send_ntfy", new=AsyncMock()) as mock_ntfy:
+        await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
 
-    assert dispatcher._http.post.call_count == 2
+    assert mock_ntfy.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_fcm_sent_when_device_type_fcm():
+    dispatcher = _make_dispatcher()
+    dispatcher._settings.fcm_service_account_json = (
+        '{"project_id":"p","client_email":"e","private_key":"k"}'
+    )
+    prefs = _make_prefs(ntfy_enabled=True)
+    db = AsyncMock()
+    device = _make_device("fcm-token")
+    device.token_type = "fcm"
+    db.execute = AsyncMock(
+        return_value=MagicMock(
+            scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[device])))
+        )
+    )
+
+    with patch("synapse.notifications.dispatcher.send_fcm", new=AsyncMock()) as mock_fcm:
+        await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
+
+    mock_fcm.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_push_not_sent_when_disabled():
+    dispatcher = _make_dispatcher()
+    prefs = _make_prefs(ntfy_enabled=False)
+    db = AsyncMock()
+
+    await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
+    db.execute.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -226,9 +263,11 @@ async def test_ntfy_error_is_caught_not_raised():
         )
     )
 
-    dispatcher._http.post = AsyncMock(side_effect=Exception("ntfy down"))
-    # Should not raise
-    await dispatcher._try_ntfy(prefs, "user-1", "Subject", "Body", db)
+    with patch(
+        "synapse.notifications.dispatcher.send_ntfy",
+        new=AsyncMock(side_effect=Exception("ntfy down")),
+    ):
+        await dispatcher._try_push(prefs, "user-1", "Subject", "Body", db)
 
 
 # ---------------------------------------------------------------------------

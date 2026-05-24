@@ -58,7 +58,7 @@ class UpdatePreferencesRequest(BaseModel):
 
 
 class RegisterDeviceRequest(BaseModel):
-    token_type: str = Field(default="ntfy", pattern="^ntfy$")
+    token_type: str = Field(default="ntfy", pattern="^(ntfy|fcm|apns)$")
     token: str = Field(min_length=1, max_length=512)
     device_label: str | None = Field(default=None, max_length=128)
 

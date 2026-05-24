@@ -4,6 +4,11 @@ Checks feature flags before every dispatch (no-op if notifications EE feature
 is not licensed). Errors are caught and logged; dispatch never raises so it
 never blocks the council pipeline.
 
+Push delivery supports three device token types stored in ``device_tokens``:
+  * ``ntfy`` — self-hosted HTTP pub/sub
+  * ``fcm``  — Firebase Cloud Messaging (Android + iOS via Firebase)
+  * ``apns`` — native Apple Push Notification service
+
 Usage (from orchestrator or router):
     await dispatcher.dispatch_verdict(
         council_id=str(session.id),
@@ -23,10 +28,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from synapse.db.models import DeviceToken, NotificationPreferences
+from synapse.notifications.apns import send_apns
+from synapse.notifications.fcm import send_fcm
 from synapse.notifications.ntfy import send_ntfy
 from synapse.notifications.smtp import send_email
 
 _logger = logging.getLogger(__name__)
+
+_PUSH_TOKEN_TYPES = ("ntfy", "fcm", "apns")
 
 
 class NotificationDispatcher:
@@ -124,7 +133,7 @@ class NotificationDispatcher:
             return  # no preferences row → opted out
 
         await self._try_email(prefs, subject, body)
-        await self._try_ntfy(prefs, recipient_principal, subject, body, db)
+        await self._try_push(prefs, recipient_principal, subject, body, db)
 
     async def _load_prefs(self, principal: str, db: AsyncSession) -> NotificationPreferences | None:
         result = await db.execute(
@@ -158,7 +167,7 @@ class NotificationDispatcher:
         except Exception:
             _logger.exception("SMTP send failed for principal=%s", prefs.principal)
 
-    async def _try_ntfy(
+    async def _try_push(
         self,
         prefs: NotificationPreferences,
         principal: str,
@@ -166,22 +175,40 @@ class NotificationDispatcher:
         body: str,
         db: AsyncSession,
     ) -> None:
+        """Deliver push via every registered device token (ntfy / fcm / apns)."""
         if not prefs.ntfy_enabled:
-            return
-        if not self._settings.ntfy_url:
-            _logger.warning("ntfy notification requested but NTFY_URL not configured")
             return
 
         result = await db.execute(
             select(DeviceToken).where(
                 DeviceToken.principal == principal,
-                DeviceToken.token_type == "ntfy",
+                DeviceToken.token_type.in_(_PUSH_TOKEN_TYPES),
             )
         )
         devices = result.scalars().all()
 
         for device in devices:
             try:
+                await self._send_to_device(device, subject, body)
+            except Exception:
+                _logger.exception(
+                    "push send failed type=%s device_id=%s principal=%s",
+                    device.token_type,
+                    device.id,
+                    principal,
+                )
+
+    async def _send_to_device(
+        self,
+        device: DeviceToken,
+        subject: str,
+        body: str,
+    ) -> None:
+        match device.token_type:
+            case "ntfy":
+                if not self._settings.ntfy_url:
+                    _logger.warning("ntfy push requested but NTFY_URL not configured")
+                    return
                 await send_ntfy(
                     topic=device.token,
                     title=subject,
@@ -191,7 +218,38 @@ class NotificationDispatcher:
                     token=self._settings.ntfy_token,
                     tags=["synapse"],
                 )
-            except Exception:
-                _logger.exception(
-                    "ntfy send failed for device_id=%s principal=%s", device.id, principal
+            case "fcm":
+                if not self._settings.fcm_service_account_json:
+                    _logger.warning(
+                        "FCM push requested but FCM_SERVICE_ACCOUNT_JSON not configured"
+                    )
+                    return
+                await send_fcm(
+                    device_token=device.token,
+                    title=subject,
+                    body=body,
+                    http_client=self._http,
+                    service_account_json=self._settings.fcm_service_account_json,
                 )
+            case "apns":
+                if not (
+                    self._settings.apns_key_id
+                    and self._settings.apns_team_id
+                    and self._settings.apns_key
+                    and self._settings.apns_bundle_id
+                ):
+                    _logger.warning("APNs push requested but APNS credentials not configured")
+                    return
+                await send_apns(
+                    device_token=device.token,
+                    title=subject,
+                    body=body,
+                    http_client=self._http,
+                    key_id=self._settings.apns_key_id,
+                    team_id=self._settings.apns_team_id,
+                    private_key=self._settings.apns_key,
+                    bundle_id=self._settings.apns_bundle_id,
+                    use_sandbox=self._settings.apns_use_sandbox,
+                )
+            case _:
+                _logger.warning("Unknown device token_type=%r — skipping", device.token_type)
