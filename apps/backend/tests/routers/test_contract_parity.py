@@ -193,8 +193,13 @@ def test_feed_schema_declares_four_item_types(contract):
     )
 
 
-def test_device_token_type_is_currently_only_ntfy(contract):
-    """Both backends restrict device_token.token_type to 'ntfy' until other
-    push transports are added."""
+def test_device_token_type_covers_ntfy_fcm_apns(contract):
+    """Both backends accept ntfy + fcm + apns as device_token.token_type.
+
+    Phase 1 (ntfy) is the always-available fallback that works without a
+    backend project. Phase 2 (fcm/apns) is gated on operator-configured
+    credentials but is a first-class accepted value in the API contract
+    regardless of whether the current deployment has the env vars set.
+    """
     schema = contract["components"]["schemas"]["DeviceToken"]
-    assert schema["properties"]["token_type"]["enum"] == ["ntfy"]
+    assert schema["properties"]["token_type"]["enum"] == ["ntfy", "fcm", "apns"]
