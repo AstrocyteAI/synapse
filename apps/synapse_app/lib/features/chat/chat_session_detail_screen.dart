@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/client.dart';
 import '../../core/api/models.dart';
+import '../../widgets/mention_picker.dart';
 
 /// Mode 4 detail screen — free-standing chat session with SSE streaming.
 ///
@@ -59,17 +60,129 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
   bool _sending = false;
   String? _streamError;
 
+  // ── @mention picker state (async-councils Slice 4) ─────────────────────
+  // Mirrors the Svelte ChatInput logic: detect an active `@partial` token
+  // under the caret, fetch matching workspace users, surface a picker
+  // above the TextField, and keep the picked humans in `_pendingHumans`
+  // until the next send. The fetch sequence number drops stale responses
+  // when the user keeps typing.
+  bool _showMentionPicker = false;
+  String _mentionQuery = '';
+  int? _mentionStart;
+  List<WorkspaceUser> _mentionUsers = const [];
+  bool _mentionLoading = false;
+  int _mentionFetchSeq = 0;
+  final List<PendingHuman> _pendingHumans = [];
+
   @override
   void initState() {
     super.initState();
+    _input.addListener(_handleInputChange);
     _load();
   }
 
   @override
   void dispose() {
+    _input.removeListener(_handleInputChange);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  // Walk back from the caret to find the most recent `@`, bailing on
+  // whitespace. Trigger is valid only at start-of-string or after a
+  // whitespace char — matches the Svelte side + the directive_input
+  // semantics so they don't fight over the same `@` keystroke.
+  ({int start, String query})? _activeMention(String text, int caret) {
+    var i = caret - 1;
+    while (i >= 0) {
+      final ch = text[i];
+      if (ch == '@') {
+        if (i == 0 || RegExp(r'\s').hasMatch(text[i - 1])) {
+          return (start: i, query: text.substring(i + 1, caret));
+        }
+        return null;
+      }
+      if (RegExp(r'\s').hasMatch(ch)) return null;
+      i--;
+    }
+    return null;
+  }
+
+  void _handleInputChange() {
+    final caret = _input.selection.baseOffset;
+    final value = _input.text;
+    if (caret < 0) return;
+    final m = _activeMention(value, caret);
+    if (m == null) {
+      if (_showMentionPicker) {
+        setState(() {
+          _showMentionPicker = false;
+          _mentionStart = null;
+          _mentionQuery = '';
+        });
+      }
+      return;
+    }
+    setState(() {
+      _showMentionPicker = true;
+      _mentionStart = m.start;
+      _mentionQuery = m.query;
+    });
+    _loadMentionUsers(m.query);
+  }
+
+  Future<void> _loadMentionUsers(String q) async {
+    setState(() => _mentionLoading = true);
+    final seq = ++_mentionFetchSeq;
+    try {
+      final users = await widget.client.listWorkspaceUsers(q: q);
+      if (!mounted || seq != _mentionFetchSeq) return;
+      setState(() => _mentionUsers = users);
+    } catch (_) {
+      // Listing isn't critical — picker still surfaces the invite-by-email
+      // row when the query parses as an address.
+      if (!mounted || seq != _mentionFetchSeq) return;
+      setState(() => _mentionUsers = const []);
+    } finally {
+      if (mounted && seq == _mentionFetchSeq) {
+        setState(() => _mentionLoading = false);
+      }
+    }
+  }
+
+  void _handleMentionSelect(PendingHuman human) {
+    // Splice the active `@partial` out and replace with a readable
+    // `@Name ` token. The picker's job is the data — the surface text
+    // just hints at it; the canonical source of truth is _pendingHumans
+    // (which gets sent in the `humans` body field).
+    final start = _mentionStart;
+    if (start != null) {
+      final before = _input.text.substring(0, start);
+      final caret = _input.selection.baseOffset.clamp(0, _input.text.length);
+      final after = _input.text.substring(caret);
+      final token = '@${human.name} ';
+      final newText = '$before$token$after';
+      final newCaret = before.length + token.length;
+      _input.value = TextEditingValue(
+        text: newText,
+        selection: TextSelection.collapsed(offset: newCaret),
+      );
+    }
+
+    // Dedupe by sub (workspace) or downcased email (invite) — picking the
+    // same person twice in one compose is a no-op, matching the server.
+    final exists = _pendingHumans.any((h) => h.dedupeKey == human.dedupeKey);
+    setState(() {
+      if (!exists) _pendingHumans.add(human);
+      _showMentionPicker = false;
+      _mentionStart = null;
+      _mentionQuery = '';
+    });
+  }
+
+  void _removePendingHuman(PendingHuman target) {
+    setState(() => _pendingHumans.remove(target));
   }
 
   Future<void> _load() async {
@@ -100,10 +213,22 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
   Future<void> _send() async {
     final content = _input.text.trim();
     if (content.isEmpty || _sending || _session == null) return;
+    // Snapshot + clear pending humans before clearing the text — the
+    // backend dedupes, but we don't want a slow stream to keep the same
+    // chips around for the next turn.
+    final humans = List<PendingHuman>.of(_pendingHumans);
     _input.clear();
+    setState(() {
+      _pendingHumans.clear();
+      _showMentionPicker = false;
+    });
     await _runTurn(
       userBubble: content,
-      stream: widget.client.streamChatMessage(widget.sessionId, content),
+      stream: widget.client.streamChatMessage(
+        widget.sessionId,
+        content,
+        humans: humans,
+      ),
     );
   }
 
@@ -324,36 +449,62 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
             ),
           ),
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _input,
-                      enabled: !s.isArchived && !_sending,
-                      decoration: InputDecoration(
-                        hintText: s.isArchived
-                            ? 'This chat is archived'
-                            : 'Type a message…',
-                        border: const OutlineInputBorder(),
-                      ),
-                      onSubmitted: (_) => _send(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_showMentionPicker)
+                  MentionPicker(
+                    query: _mentionQuery,
+                    users: _mentionUsers,
+                    loading: _mentionLoading,
+                    onSelect: _handleMentionSelect,
+                  ),
+                if (_pendingHumans.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: _pendingHumans
+                          .map((h) => _PendingHumanChip(
+                                human: h,
+                                onRemove: () => _removePendingHuman(h),
+                              ))
+                          .toList(growable: false),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: (s.isArchived || _sending) ? null : _send,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _input,
+                          enabled: !s.isArchived && !_sending,
+                          decoration: InputDecoration(
+                            hintText: s.isArchived
+                                ? 'This chat is archived'
+                                : 'Type a message…',
+                            border: const OutlineInputBorder(),
+                          ),
+                          onSubmitted: (_) => _send(),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton.filled(
+                        onPressed: (s.isArchived || _sending) ? null : _send,
+                        icon: _sending
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.send),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -516,4 +667,63 @@ class _ChatSessionDetailScreenState extends State<ChatSessionDetailScreen> {
 
 extension _LastOrNull<T> on List<T> {
   T? get lastOrNull => isEmpty ? null : last;
+}
+
+/// Removable chip rendered above the chat input for each @-mentioned
+/// human. Visually mirrors the Svelte `<span>` chip from ChatInput.svelte
+/// (indigo background, "invite" tag for external invitees, × to remove).
+class _PendingHumanChip extends StatelessWidget {
+  final PendingHuman human;
+  final VoidCallback onRemove;
+
+  const _PendingHumanChip({required this.human, required this.onRemove});
+
+  @override
+  Widget build(BuildContext context) {
+    final isInvite = human is PendingHumanInvite;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+        border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.30)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '@${human.name}',
+            style: const TextStyle(
+              color: Color(0xFFC7D2FE),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          if (isInvite) ...const [
+            SizedBox(width: 4),
+            Text(
+              'invite',
+              style: TextStyle(
+                color: Color(0xFFA5B4FC),
+                fontSize: 10,
+              ),
+            ),
+          ],
+          const SizedBox(width: 4),
+          InkWell(
+            onTap: onRemove,
+            customBorder: const CircleBorder(),
+            child: const Padding(
+              padding: EdgeInsets.all(2),
+              child: Icon(
+                Icons.close,
+                size: 12,
+                color: Color(0xFFA5B4FC),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

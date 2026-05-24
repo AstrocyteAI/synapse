@@ -36,6 +36,10 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
   final _labelCtrl = TextEditingController();
   bool _ntfyEnabled = false;
   bool _emailEnabled = false;
+  // FCM/APNs mobile-push gate (Slice 6b). Separate from `_ntfyEnabled`
+  // since async-councils Slice 5 split the dispatcher's gating — turning
+  // off ntfy no longer silently kills FCM/APNs.
+  bool _pushEnabled = false;
 
   @override
   void initState() {
@@ -65,6 +69,7 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
       _topic = results[2] as String;
       _emailEnabled = prefs.emailEnabled;
       _ntfyEnabled = prefs.ntfyEnabled;
+      _pushEnabled = prefs.pushEnabled;
       _emailCtrl.text = prefs.emailAddress ?? '';
       _labelCtrl.text = (results[3] as String?) ?? 'My phone';
       _error = null;
@@ -82,6 +87,7 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
         emailEnabled: _emailEnabled,
         emailAddress: _emailEnabled ? _emailCtrl.text.trim() : null,
         ntfyEnabled: _ntfyEnabled,
+        pushEnabled: _pushEnabled,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,7 +111,11 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
       if (label != null) {
         await widget.notificationService.setDeviceLabel(label);
       }
-      await widget.apiClient.registerDeviceToken(token: _topic!, deviceLabel: label);
+      await widget.apiClient.registerDeviceToken(
+        token: _topic!,
+        tokenType: 'ntfy',
+        deviceLabel: label,
+      );
       // Begin listening once the backend knows our topic
       await widget.notificationService.startListening();
       _devices = await widget.apiClient.listDeviceTokens();
@@ -189,8 +199,20 @@ class _NotificationsSettingsScreenState extends State<NotificationsSettingsScree
               const Divider(),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Push (ntfy)'),
-                subtitle: const Text('Verdict + summon push to this device'),
+                title: const Text('Mobile push (FCM / APNs)'),
+                subtitle: const Text(
+                  'Wake your phone for verdicts and async-council nudges.',
+                ),
+                value: _pushEnabled,
+                onChanged: (v) => setState(() => _pushEnabled = v),
+              ),
+              const Divider(),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('ntfy fallback'),
+                subtitle: const Text(
+                  'Self-hosted topic fallback when FCM/APNs aren\'t configured.',
+                ),
                 value: _ntfyEnabled,
                 onChanged: (v) => setState(() => _ntfyEnabled = v),
               ),

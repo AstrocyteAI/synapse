@@ -335,12 +335,18 @@ class NotificationPreferences {
   final bool emailEnabled;
   final String? emailAddress;
   final bool ntfyEnabled;
+  // FCM/APNs gate — independent of `ntfy_enabled` since async-councils
+  // Slice 5. The old wiring conflated them (turning off ntfy silently
+  // killed mobile push too); now this is the canonical mobile-push
+  // switch. Defaults false so opt-in is explicit.
+  final bool pushEnabled;
   final String updatedAt;
 
   const NotificationPreferences({
     required this.emailEnabled,
     this.emailAddress,
     required this.ntfyEnabled,
+    this.pushEnabled = false,
     required this.updatedAt,
   });
 
@@ -349,6 +355,10 @@ class NotificationPreferences {
       emailEnabled: (json['email_enabled'] as bool?) ?? false,
       emailAddress: json['email_address'] as String?,
       ntfyEnabled: (json['ntfy_enabled'] as bool?) ?? false,
+      // Backend defaults this to false on the row when not yet set; the
+      // ?? guard also covers Synapse OSS responses that don't have the
+      // field at all (parity-friendly).
+      pushEnabled: (json['push_enabled'] as bool?) ?? false,
       updatedAt: (json['updated_at'] as String?) ?? '',
     );
   }
@@ -380,8 +390,80 @@ class DeviceToken {
   }
 }
 
+/// Recently-active workspace principal — populates the chat-input
+/// @mention picker on async-council creation. Cerebro aggregates from
+/// audit_logs + councils.created_by; Synapse OSS doesn't expose this
+/// yet (clients handle the 404 by falling through to email-invite mode).
+class WorkspaceUser {
+  /// Stable principal id, e.g. "user:alice". Used as the council member
+  /// id when this user is added to a roster — round-trips verbatim.
+  final String id;
+
+  /// Prefix-stripped label for UI ("alice"). Same value the picker
+  /// inserts into the textarea after a selection.
+  final String displayName;
+
+  /// ISO 8601 timestamp; null when the principal has never been seen.
+  final String? lastSeenAt;
+
+  const WorkspaceUser({
+    required this.id,
+    required this.displayName,
+    this.lastSeenAt,
+  });
+
+  factory WorkspaceUser.fromJson(Map<String, dynamic> json) => WorkspaceUser(
+        id: json['id'] as String,
+        displayName: json['display_name'] as String,
+        lastSeenAt: json['last_seen_at'] as String?,
+      );
+}
+
+/// A human collected from the @mention picker before the user submits a
+/// chat message. Either `sub` (workspace user) OR `email` (external
+/// invitee) is set, never both — picker keeps them disjoint at the type
+/// level. Becomes the `humans` arg threaded into the chat-with-tools
+/// `streamChatMessage` call (Cerebro merges it into the
+/// `synapse_council_start` tool's `humans` parameter server-side).
+sealed class PendingHuman {
+  final String name;
+  const PendingHuman({required this.name});
+
+  Map<String, dynamic> toJson();
+
+  /// Stable dedupe key for chip equality (workspace sub or downcased
+  /// email). Mirrors the server-side dedupe in `Synapse.Chat.Tools`.
+  String get dedupeKey;
+}
+
+class PendingHumanWorkspace extends PendingHuman {
+  final String sub;
+  const PendingHumanWorkspace({required super.name, required this.sub});
+
+  @override
+  Map<String, dynamic> toJson() => {'name': name, 'sub': sub};
+
+  @override
+  String get dedupeKey => 'sub:$sub';
+}
+
+class PendingHumanInvite extends PendingHuman {
+  final String email;
+  const PendingHumanInvite({required super.name, required this.email});
+
+  @override
+  Map<String, dynamic> toJson() => {'name': name, 'email': email};
+
+  @override
+  String get dedupeKey => 'email:${email.toLowerCase()}';
+}
+
 class FeedItem {
-  /// One of: verdict_ready, pending_approval, in_progress, summon_requested
+  /// One of: verdict_ready, pending_approval, in_progress,
+  /// summon_requested, awaited_contribution.
+  /// `awaited_contribution` is Cerebro-only and added by async councils
+  /// Slice 3.5 — surfaces when the current user is a `member_type:
+  /// "human"` member of a parked council.
   final String type;
   final String councilId;
   final String question;

@@ -144,6 +144,30 @@ class SynapseApiClient {
     _checkResponse(response);
   }
 
+  /// GET /v1/workspace/users — recently-active principals for the chat
+  /// @mention picker. Optional `q` filters server-side on display name /
+  /// id (case-insensitive substring). Returns `[]` on 404 (Synapse OSS
+  /// doesn't have parity yet) so callers can degrade to email-only mode
+  /// without an extra error-handling layer.
+  Future<List<WorkspaceUser>> listWorkspaceUsers({
+    String? q,
+    int limit = 25,
+  }) async {
+    final headers = await _authHeaders();
+    final params = <String, String>{'limit': '$limit'};
+    if (q != null && q.trim().isNotEmpty) params['q'] = q.trim();
+    final uri = Uri.parse(
+      '$baseUrl/v1/workspace/users',
+    ).replace(queryParameters: params);
+    final response = await _httpClient.get(uri, headers: headers);
+    if (response.statusCode == 404) return const [];
+    _checkResponse(response);
+    final list = _unwrapList(jsonDecode(response.body));
+    return list
+        .map((e) => WorkspaceUser.fromJson(e as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
   Future<ContributeResponse> contribute(
     String sessionId, {
     required String memberId,
@@ -262,12 +286,18 @@ class SynapseApiClient {
     required bool emailEnabled,
     String? emailAddress,
     required bool ntfyEnabled,
+    // Optional so callers that don't care about FCM/APNs gating (or are
+    // hitting a Synapse OSS backend that doesn't have the field yet) can
+    // omit it. The backend tolerates partial PUTs — anything absent
+    // keeps its current value.
+    bool? pushEnabled,
   }) async {
     final headers = await _authHeaders();
-    final body = {
+    final body = <String, dynamic>{
       'email_enabled': emailEnabled,
       'email_address': emailAddress,
       'ntfy_enabled': ntfyEnabled,
+      if (pushEnabled != null) 'push_enabled': pushEnabled,
     };
     final uri = Uri.parse('$baseUrl/v1/notifications/preferences');
     final response = await _httpClient.put(
@@ -293,10 +323,11 @@ class SynapseApiClient {
 
   Future<DeviceToken> registerDeviceToken({
     required String token,
+    String tokenType = 'ntfy',
     String? deviceLabel,
   }) async {
     final headers = await _authHeaders();
-    final body = <String, dynamic>{'token': token, 'token_type': 'ntfy'};
+    final body = <String, dynamic>{'token': token, 'token_type': tokenType};
     if (deviceLabel != null) body['device_label'] = deviceLabel;
     final uri = Uri.parse('$baseUrl/v1/notifications/devices');
     final response = await _httpClient.post(
@@ -467,13 +498,22 @@ class SynapseApiClient {
   /// treat the absence of a final [MessageCompleteEvent] as a failed turn —
   /// status is locked to 200 by send_chunked/2 so the only honest failure
   /// signal is an in-body [ChatErrorEvent] or a missing message_complete.
+  /// `humans` carries any @-mentioned contributors from the chat-input
+  /// picker. The backend merges them with whatever the LLM emits in the
+  /// `synapse_council_start` tool call args — picker is ground truth,
+  /// the LLM's text framing is just how the user asked.
   Stream<ChatSseEvent> streamChatMessage(
     String sessionId,
-    String content,
-  ) =>
+    String content, {
+    List<PendingHuman> humans = const [],
+  }) =>
       _streamSse(
         '/v1/chat/sessions/$sessionId/messages',
-        {'content': content},
+        {
+          'content': content,
+          if (humans.isNotEmpty)
+            'humans': humans.map((h) => h.toJson()).toList(growable: false),
+        },
       );
 
   // -------------------------------------------------------------------------

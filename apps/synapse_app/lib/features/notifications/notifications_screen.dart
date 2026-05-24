@@ -76,6 +76,13 @@ class _FeedItemTile extends StatelessWidget {
         return Colors.amber.shade700;
       case 'summon_requested':
         return Colors.indigo.shade400;
+      case 'awaited_contribution':
+        // Distinct from `summon_requested` — that's the operator-voice
+        // ("your council is waiting for humans"); this one is the
+        // participant-voice ("you are one of those humans"). Hotter
+        // colour to reflect action required of THIS user. Matches the
+        // Svelte web side (rose-500/15 token).
+        return Colors.pink.shade400;
       case 'in_progress':
         return cs.outline;
       default:
@@ -91,6 +98,8 @@ class _FeedItemTile extends StatelessWidget {
         return 'Needs approval';
       case 'summon_requested':
         return 'You are summoned';
+      case 'awaited_contribution':
+        return "You're awaited";
       case 'in_progress':
         return 'In progress';
       default:

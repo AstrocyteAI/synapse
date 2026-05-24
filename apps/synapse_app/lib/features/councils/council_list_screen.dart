@@ -16,6 +16,11 @@ class CouncilListScreen extends StatefulWidget {
 
 class _CouncilListScreenState extends State<CouncilListScreen> {
   List<CouncilSummary> _councils = [];
+  // Council ids where the current user is the AWAITED human (Slice 4.5).
+  // Derived from the notifications feed — that's already principal-scoped
+  // server-side, so we don't duplicate the "is this council waiting on
+  // me?" check client-side.
+  Set<String> _awaitedIds = const {};
   bool _loading = true;
   String? _error;
 
@@ -31,10 +36,24 @@ class _CouncilListScreenState extends State<CouncilListScreen> {
       _error = null;
     });
     try {
-      final councils = await widget.client.listCouncils();
+      // Fire both in parallel — the awaited badge is a nice-to-have, so
+      // a feed-fetch failure must not block the council list render.
+      final results = await Future.wait<Object>([
+        widget.client.listCouncils(),
+        widget.client.getNotificationFeed(limit: 50).then<List<FeedItem>>(
+              (items) => items,
+              onError: (_) => const <FeedItem>[],
+            ),
+      ]);
+      final councils = results[0] as List<CouncilSummary>;
+      final feed = results[1] as List<FeedItem>;
       if (mounted) {
         setState(() {
           _councils = councils;
+          _awaitedIds = feed
+              .where((it) => it.type == 'awaited_contribution')
+              .map((it) => it.councilId)
+              .toSet();
           _loading = false;
         });
       }
@@ -135,11 +154,28 @@ class _CouncilListScreenState extends State<CouncilListScreen> {
       itemCount: _councils.length,
       itemBuilder: (context, index) {
         final council = _councils[index];
+        final awaited = _awaitedIds.contains(council.sessionId);
         final question = council.question.length > 80
             ? '${council.question.substring(0, 80)}…'
             : council.question;
         return ListTile(
-          title: Text(question, style: const TextStyle(fontSize: 14)),
+          // Pink-tinted background reinforces the awaited row without
+          // adding a separate widget — matches the rose-bg treatment on
+          // the Svelte /councils card (Slice 3.5).
+          tileColor: awaited
+              ? Colors.pink.shade400.withValues(alpha: 0.08)
+              : null,
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(question, style: const TextStyle(fontSize: 14)),
+              ),
+              if (awaited) ...[
+                const SizedBox(width: 8),
+                _AwaitingYouPip(),
+              ],
+            ],
+          ),
           subtitle: Row(
             children: [
               CouncilStatusBadge(status: council.status),
@@ -161,6 +197,36 @@ class _CouncilListScreenState extends State<CouncilListScreen> {
           onTap: () => context.push('/councils/${council.sessionId}'),
         );
       },
+    );
+  }
+}
+
+/// Compact pip stamped to the right of the council title when the
+/// current user is a `member_type: "human"` member of a parked async
+/// council. The badge colour (pink-400 family) matches the
+/// `awaited_contribution` row on the notifications screen so the two
+/// surfaces share a visual language.
+class _AwaitingYouPip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'You are awaited on this council',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.pink.shade400.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          'AWAITING YOU',
+          style: TextStyle(
+            color: Colors.pink.shade200,
+            fontSize: 9,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ),
     );
   }
 }

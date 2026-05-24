@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'core/api/client.dart';
@@ -20,7 +22,9 @@ import 'features/settings/notifications_settings_screen.dart';
 import 'features/settings/settings_screen.dart';
 
 class SynapseApp extends StatefulWidget {
-  const SynapseApp({super.key});
+  final bool firebaseReady;
+
+  const SynapseApp({super.key, this.firebaseReady = false});
 
   @override
   State<SynapseApp> createState() => _SynapseAppState();
@@ -32,6 +36,7 @@ class _SynapseAppState extends State<SynapseApp> {
   late final SynapseApiClient _client;
   late final NotificationService _notifications;
   late final GoRouter _router;
+  bool _pushHooked = false;
 
   @override
   void initState() {
@@ -44,7 +49,16 @@ class _SynapseAppState extends State<SynapseApp> {
     // with stored state.
     _client = SynapseApiClient(baseUrl: '', tokenStore: _tokenStore);
     _notifications = NotificationService();
-    _notifications.initialize();
+    _notifications.bindApiClient(_client);
+    // Push-tap deep linking (Slice 6a). The service stays decoupled from
+    // go_router — it just calls back here with a council id; we trampoline
+    // through the router. `mounted` guards against late callbacks after
+    // the widget is gone (e.g. signed-out cold-start tap).
+    _notifications.onCouncilOpen = (councilId) {
+      if (!mounted) return;
+      _router.go('/councils/$councilId');
+    };
+    _notifications.initialize(firebaseReady: widget.firebaseReady);
 
     _router = GoRouter(
       initialLocation: '/councils',
@@ -64,6 +78,13 @@ class _SynapseAppState extends State<SynapseApp> {
         final token = await _tokenStore.getToken();
         final isLogin = loc == '/login';
         if (token == null && !isSetup && !isLogin) return '/login';
+        if (token == null) _pushHooked = false;
+
+        // Post-login: register FCM/APNs device token + start ntfy fallback.
+        if (token != null && serverUrl != null && !_pushHooked) {
+          _pushHooked = true;
+          unawaited(_notifications.onAuthenticated());
+        }
 
         return null;
       },

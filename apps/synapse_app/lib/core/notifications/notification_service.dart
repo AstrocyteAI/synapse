@@ -1,69 +1,95 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import '../api/client.dart';
+
 /// F3 — push notification orchestration for the Synapse Flutter app.
 ///
-/// Receives notifications via **ntfy** (a self-hostable HTTP/WebSocket push
-/// service). The flow:
-///
-///   1. App starts, NotificationService.initialize() runs.
-///   2. If no ntfy topic exists in shared preferences, generate one
-///      (`synapse-{uuid}`) and register it as a device token via
-///      `POST /v1/notifications/devices`.
-///   3. Open a long-poll HTTP stream to `https://ntfy.sh/{topic}/json`.
-///   4. Each line of the stream is a JSON event; if event.event == 'message'
-///      we display a local notification.
-///
-/// Why ntfy and not FCM/APNs:
-///   * No vendor lock-in. ntfy is MIT-licensed and self-hostable.
-///   * Cerebro / Synapse backend already supports ntfy as the only
-///     `device_token.token_type` (B10).
-///   * On Android, the user can install the ntfy app and subscribe to the
-///     same topic for native push delivery; this service is a fallback for
-///     in-app foreground display.
-///
-/// Open work for follow-up:
-///   * iOS native push via APNs — out of scope for F3 Phase 1.
-///   * Background isolate to receive ntfy events when app is killed.
-///   * Notification channel categorisation (verdict / summon / approval).
+/// Delivery paths (in priority order when configured):
+///   1. **FCM/APNs** (Phase 2) — `firebase_messaging` for background/killed-app
+///      delivery on iOS and Android. Token registered as `token_type: fcm`.
+///   2. **ntfy long-poll** (Phase 1) — foreground/desktop fallback via HTTP
+///      stream to `https://ntfy.sh/{topic}/json`.
 class NotificationService {
   static const _kTopicPrefKey = 'synapse_ntfy_topic';
   static const _kDeviceLabelPrefKey = 'synapse_ntfy_device_label';
+  static const _kFcmRegisteredPrefKey = 'synapse_fcm_registered_token';
   static const _ntfyServer = 'https://ntfy.sh';
+
+  static final FlutterLocalNotificationsPlugin _backgroundLocal =
+      FlutterLocalNotificationsPlugin();
 
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
 
   String? _topic;
   bool _initialized = false;
+  bool _firebaseReady = false;
+  bool _backendRegistered = false;
   http.Client? _streamClient;
+  SynapseApiClient? _apiClient;
 
-  /// Subscribe to be notified in-app. Replace these with your own UI plumbing.
-  /// `onMessage(title, body)` is called for every received ntfy message;
-  /// `onError(reason)` for transport failures so the UI can surface a banner.
+  /// Subscribe to be notified in-app.
   void Function(String title, String body)? onMessage;
   void Function(String reason)? onError;
 
-  /// Run once at app start. Idempotent — second call is a no-op.
+  /// Fired when the user taps a notification that carries a council deep
+  /// link. The handler is responsible for navigation (the service
+  /// deliberately doesn't import go_router so it stays unit-testable).
   ///
-  /// Call this in `main()` AFTER login if the user is authenticated;
-  /// otherwise call it from the post-login hook so the device token can
-  /// be registered with the backend.
-  Future<void> initialize() async {
-    if (_initialized) return;
+  /// Fires from THREE entry points, all funnelled through one callback:
+  ///   1. `FirebaseMessaging.onMessageOpenedApp` — tap while app is in
+  ///      the background but still running.
+  ///   2. `FirebaseMessaging.getInitialMessage` — tap that cold-started
+  ///      the app from a terminated state.
+  ///   3. `flutter_local_notifications.onDidReceiveNotificationResponse`
+  ///      — tap on a notification the app rendered itself (foreground
+  ///      delivery + ntfy long-poll).
+  void Function(String councilId)? onCouncilOpen;
 
-    // Local-notification permission + Android channel setup. iOS prompts
-    // happen lazily on first show; Android 13+ needs explicit POST_NOTIFICATIONS.
+  /// Tenant the user is currently signed into. Used by the defence-in-
+  /// depth filter that drops incoming pushes whose `data.tenant_id`
+  /// doesn't match — guards against stale device-token rows in a tenant
+  /// the user has since signed out of (the row persists server-side
+  /// until explicitly deleted, so pushes can keep arriving). Set by the
+  /// app shell on auth, cleared on sign-out.
+  String? _currentTenantId;
+
+  /// Called when the user signs into a tenant (or switches). Mismatches
+  /// after this point cause silent suppression of any push whose payload
+  /// carries a different `tenant_id`.
+  ///
+  /// `null` means "no current tenant" — in that case the filter still
+  /// runs but suppresses ALL tenant-tagged pushes. Pre-Slice-8 pushes
+  /// (no `tenant_id` field on the payload) always pass — that's the
+  /// graceful-fallback behaviour for old server versions.
+  void setCurrentTenantId(String? tenantId) {
+    _currentTenantId = tenantId;
+  }
+
+  /// Bind the API client for automatic post-login device registration.
+  void bindApiClient(SynapseApiClient client) {
+    _apiClient = client;
+  }
+
+  /// Run once at app start. Idempotent.
+  Future<void> initialize({bool firebaseReady = false}) async {
+    if (_initialized) return;
+    _firebaseReady = firebaseReady;
+
     await _local.initialize(
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
       ),
+      onDidReceiveNotificationResponse: _onNotificationTap,
     );
 
     if (Platform.isAndroid) {
@@ -78,10 +104,224 @@ class NotificationService {
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 
+    if (_firebaseReady) {
+      await _setupFirebaseMessaging();
+    }
+
     _initialized = true;
   }
 
-  /// Get the persisted ntfy topic, or generate a fresh one and persist.
+  /// Register push endpoints with the backend after login.
+  /// Safe to call multiple times — skips duplicate FCM registration.
+  Future<void> registerWithBackend() async {
+    final client = _apiClient;
+    if (client == null) return;
+
+    if (_firebaseReady) {
+      await _registerFcmToken(client);
+    }
+  }
+
+  /// Called from GoRouter redirect when auth + server are ready.
+  Future<void> onAuthenticated() async {
+    await registerWithBackend();
+    // Foreground ntfy fallback when FCM is unavailable or for desktop builds.
+    if (!_firebaseReady && !kIsWeb) {
+      await startListening();
+    }
+  }
+
+  Future<void> _setupFirebaseMessaging() async {
+    final messaging = FirebaseMessaging.instance;
+
+    if (Platform.isIOS) {
+      await messaging.requestPermission(alert: true, badge: true, sound: true);
+      // Ensure APNs token is available before FCM token on iOS.
+      await messaging.getAPNSToken();
+    }
+
+    FirebaseMessaging.onMessage.listen((message) {
+      if (!_passesTenantFilter(message.data)) return;
+      final title = message.notification?.title ?? message.data['title'] ?? 'Synapse';
+      final body = message.notification?.body ?? message.data['body'] ?? '';
+      // Pass council_id + tenant_id through to _showLocal so a tap on
+      // the local notification we render here still deep-links AND
+      // re-runs the tenant filter at tap time (the user may have
+      // switched tenants between receive and tap).
+      _showLocal(
+        title,
+        body,
+        councilId: _councilIdFrom(message.data),
+        tenantId: message.data['tenant_id'] as String?,
+      );
+      onMessage?.call(title, body);
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      if (!_passesTenantFilter(message.data)) return;
+      final title = message.notification?.title ?? message.data['title'] ?? 'Synapse';
+      final body = message.notification?.body ?? message.data['body'] ?? '';
+      onMessage?.call(title, body);
+      _maybeOpenCouncil(_councilIdFrom(message.data));
+    });
+
+    // Cold start from a notification tap. Returns the message that
+    // launched the app, or null if launched normally — we drain it once
+    // here so the deep link still fires. Tenant filter applies here too
+    // so a cold-start tap on a stale-tenant push doesn't yank the user
+    // into the wrong tenant's council screen.
+    final initial = await messaging.getInitialMessage();
+    if (initial != null && _passesTenantFilter(initial.data)) {
+      _maybeOpenCouncil(_councilIdFrom(initial.data));
+    }
+
+    messaging.onTokenRefresh.listen((token) async {
+      final client = _apiClient;
+      if (client != null) {
+        await _uploadFcmToken(client, token);
+      }
+    });
+  }
+
+  // Backend payload contract (see Synapse.Notifications.Push.Fcm/Apns):
+  // `data` carries string-keyed fields including `council_id` and `kind`.
+  // Tolerate either a top-level `council_id` or a nested `data.council_id`
+  // shape — APNs places everything alongside `aps` but FCM sometimes
+  // bubbles `data` up depending on platform plumbing.
+  String? _councilIdFrom(Map<String, dynamic>? data) {
+    if (data == null) return null;
+    final direct = data['council_id'];
+    if (direct is String && direct.isNotEmpty) return direct;
+    final nested = data['data'];
+    if (nested is Map) {
+      final nestedId = nested['council_id'];
+      if (nestedId is String && nestedId.isNotEmpty) return nestedId;
+    }
+    return null;
+  }
+
+  void _maybeOpenCouncil(String? councilId) {
+    if (councilId == null || councilId.isEmpty) return;
+    final handler = onCouncilOpen;
+    if (handler != null) handler(councilId);
+  }
+
+  /// Defence-in-depth filter: drop pushes whose payload `tenant_id`
+  /// doesn't match the currently-signed-in tenant.
+  ///
+  /// Three cases:
+  ///   * Payload has no `tenant_id` (old-server pre-Slice-8 OR an
+  ///     ntfy payload that lacks the field): pass. Backwards-compatible.
+  ///   * Payload has `tenant_id` AND `_currentTenantId` is null
+  ///     (user signed out, but device-token row still live on server):
+  ///     SUPPRESS. Log it so the operator can see stale tokens piling
+  ///     up server-side.
+  ///   * Payload `tenant_id` differs from `_currentTenantId`
+  ///     (user signed into a different tenant since this token was
+  ///     registered): SUPPRESS. Same logging.
+  ///
+  /// The server-side `list_devices(tenant_id, ...)` lookup is already
+  /// tenant-scoped; this guard catches the edge case where the user is
+  /// a member of multiple tenants and the OS just delivered a push
+  /// from a tenant they're not currently looking at.
+  bool _passesTenantFilter(Map<String, dynamic>? data) {
+    if (data == null) return true;
+    final payloadTenant = data['tenant_id'];
+    if (payloadTenant is! String || payloadTenant.isEmpty) return true;
+
+    final current = _currentTenantId;
+    if (current == null || payloadTenant != current) {
+      if (kDebugMode) {
+        debugPrint(
+          'NotificationService: suppressed push for tenant=$payloadTenant '
+          '(current=$current). Server-side device-token row likely stale.',
+        );
+      }
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _registerFcmToken(SynapseApiClient client) async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token == null || token.isEmpty) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final last = prefs.getString(_kFcmRegisteredPrefKey);
+      if (last == token && _backendRegistered) return;
+
+      await _uploadFcmToken(client, token);
+      _backendRegistered = true;
+    } catch (e) {
+      onError?.call('FCM registration failed: $e');
+    }
+  }
+
+  Future<void> _uploadFcmToken(SynapseApiClient client, String token) async {
+    final label = await getDeviceLabel() ?? _defaultDeviceLabel();
+    await client.registerDeviceToken(
+      token: token,
+      tokenType: 'fcm',
+      deviceLabel: label,
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kFcmRegisteredPrefKey, token);
+  }
+
+  String _defaultDeviceLabel() {
+    if (Platform.isIOS) return 'iOS device';
+    if (Platform.isAndroid) return 'Android device';
+    return 'Mobile device';
+  }
+
+  void _onNotificationTap(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload == null || payload.isEmpty) return;
+    try {
+      final data = jsonDecode(payload) as Map<String, dynamic>;
+      // Same defence-in-depth filter as the FCM path. If a stale
+      // notification (rendered before the user switched tenants) sits in
+      // the OS tray, tapping it must not yank them into the wrong
+      // tenant's council screen.
+      if (!_passesTenantFilter(data)) return;
+
+      final title = (data['title'] as String?) ?? 'Synapse';
+      final body = (data['body'] as String?) ?? '';
+      onMessage?.call(title, body);
+      // Local-render path (foreground FCM + ntfy long-poll) — payload
+      // carries the same council_id we extracted at receive time.
+      final councilId = data['council_id'];
+      if (councilId is String) _maybeOpenCouncil(councilId);
+    } catch (_) {}
+  }
+
+  /// Background isolate entry — shows a notification without the app instance.
+  static Future<void> showBackgroundNotification(String title, String body) async {
+    await _backgroundLocal.initialize(
+      const InitializationSettings(
+        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        iOS: DarwinInitializationSettings(),
+      ),
+    );
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'synapse_default',
+        'Synapse',
+        channelDescription: 'Verdicts, summons, and approval requests',
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+      iOS: DarwinNotificationDetails(),
+    );
+    await _backgroundLocal.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(1 << 31),
+      title,
+      body,
+      details,
+    );
+  }
+
   Future<String> ensureTopic() async {
     if (_topic != null) return _topic!;
     final prefs = await SharedPreferences.getInstance();
@@ -96,8 +336,6 @@ class NotificationService {
     return fresh;
   }
 
-  /// Persist a human-friendly device label so the operator can identify
-  /// this device later in `/settings/notifications`.
   Future<void> setDeviceLabel(String label) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kDeviceLabelPrefKey, label);
@@ -108,8 +346,6 @@ class NotificationService {
     return prefs.getString(_kDeviceLabelPrefKey);
   }
 
-  /// Begin long-polling the ntfy topic. Call once after login + initialize.
-  /// Cancellable via [stopListening]. Quietly retries on disconnect.
   Future<void> startListening() async {
     if (_topic == null) await ensureTopic();
     final url = '$_ntfyServer/$_topic/json';
@@ -139,10 +375,7 @@ class NotificationService {
                 await _showLocal(title, body);
                 onMessage?.call(title, body);
               }
-            } catch (_) {
-              // Malformed line — keep going, ntfy occasionally sends
-              // keepalive pings that aren't strict JSON.
-            }
+            } catch (_) {}
           }
         } catch (e) {
           onError?.call(e.toString());
@@ -157,7 +390,22 @@ class NotificationService {
     _streamClient = null;
   }
 
-  Future<void> _showLocal(String title, String body) async {
+  Future<void> _showLocal(
+    String title,
+    String body, {
+    String? councilId,
+    String? tenantId,
+  }) async {
+    // Serialise everything the tap handler needs — `_onNotificationTap`
+    // re-parses this exact shape. Keep optional fields off the payload
+    // when nil so tap-on-non-council notifications don't misroute and
+    // the tenant filter doesn't run against a missing value.
+    final payload = jsonEncode({
+      'title': title,
+      'body': body,
+      if (councilId != null) 'council_id': councilId,
+      if (tenantId != null) 'tenant_id': tenantId,
+    });
     const details = NotificationDetails(
       android: AndroidNotificationDetails(
         'synapse_default',
@@ -173,6 +421,31 @@ class NotificationService {
       title,
       body,
       details,
+      payload: payload,
     );
+  }
+
+  // ── Test-only seam (Slice 6a) ────────────────────────────────────────────
+  //
+  // Production push-tap routing fires through three async entry points
+  // (FCM background tap, FCM cold-start, local-tap on app-rendered
+  // notification) — none of which are practical to drive end-to-end in a
+  // unit test without a live Firebase + APNs stack. This visible-for-
+  // testing helper exposes the parse-then-dispatch core so tests can
+  // verify the data-shape handling (top-level `council_id`, nested
+  // `data.council_id`, missing/empty values) without spinning up the
+  // platform plumbing.
+  @visibleForTesting
+  void handlePushDataForTest(Map<String, dynamic>? data) {
+    _maybeOpenCouncil(_councilIdFrom(data));
+  }
+
+  /// Test seam for the tenant filter — exposes the production decision
+  /// (suppress vs. pass) without spinning up the FCM/local-notification
+  /// plumbing. The real handlers call `_passesTenantFilter/1` before
+  /// any side-effecting work.
+  @visibleForTesting
+  bool passesTenantFilterForTest(Map<String, dynamic>? data) {
+    return _passesTenantFilter(data);
   }
 }
