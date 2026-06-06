@@ -41,9 +41,7 @@ Future<void> main() async {
 
   runApp(
     ProviderScope(
-      overrides: [
-        firebaseReadyProvider.overrideWithValue(firebaseReady),
-      ],
+      overrides: [firebaseReadyProvider.overrideWithValue(firebaseReady)],
       child: app,
     ),
   );

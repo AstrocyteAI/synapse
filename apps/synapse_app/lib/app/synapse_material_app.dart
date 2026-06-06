@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/routing/router_provider.dart';
-import '../core/theme/app_colors.dart';
+import '../ui/synapse_theme.dart';
 
 /// Shared `MaterialApp.router` shell — the single place where
 /// `MaterialApp` is configured for ALL platforms.
@@ -20,24 +20,8 @@ class SynapseMaterialApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'Synapse',
-      theme: ThemeData.dark().copyWith(
-        colorScheme: const ColorScheme.dark(
-          primary: AppColors.brand,
-          secondary: AppColors.brand,
-          surface: AppColors.surface,
-        ),
-        scaffoldBackgroundColor: AppColors.background,
-        cardColor: AppColors.surface,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: AppColors.surface,
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: AppColors.brand,
-          foregroundColor: Colors.white,
-        ),
-      ),
+      debugShowCheckedModeBanner: false,
+      theme: buildSynapseTheme(),
       routerConfig: router,
     );
   }
