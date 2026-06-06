@@ -4,11 +4,11 @@
 #   docker compose up --build
 #
 # Services:
-#   synapse-backend     FastAPI council engine          http://localhost:8000
+#   synapse-backend     FastAPI council engine          http://localhost:8010
 #   centrifugo          Real-time WebSocket/SSE sidecar ws://localhost:8001
 #   postgres            Synapse PostgreSQL              localhost:5432
 #   astrocyte-gateway   Astrocyte memory gateway        http://localhost:8080 (internal)
-#   astrocyte-postgres  Astrocyte PostgreSQL            localhost:5433
+#   astrocyte-postgres  Astrocyte PostgreSQL            localhost:55433
 
 services:
 
@@ -20,12 +20,12 @@ services:
       context: apps/backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "8010:8000"
     environment:
       DATABASE_URL: postgresql+asyncpg://synapse:synapse@postgres:5432/synapse
       ASTROCYTE_GATEWAY_URL: http://astrocyte-gateway:8080
       ASTROCYTE_TOKEN: ${ASTROCYTE_TOKEN:-dev-astrocyte-api-key}
-      CENTRIFUGO_API_URL: http://centrifugo:8002
+      CENTRIFUGO_API_URL: http://centrifugo:8000
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:-dev-centrifugo-api-key}
       CENTRIFUGO_TOKEN_SECRET: ${CENTRIFUGO_TOKEN_SECRET:-dev-centrifugo-token-secret}
       SYNAPSE_AUTH_MODE: ${SYNAPSE_AUTH_MODE:-jwt_hs256}
@@ -34,6 +34,13 @@ services:
       SYNAPSE_LLM_PROVIDER: ${SYNAPSE_LLM_PROVIDER:-litellm}
       LITELLM_API_BASE: ${LITELLM_API_BASE:-}
       LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_ADMIN_KEY: ${OPENAI_ADMIN_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      DEFAULT_MEMBERS: '[{"model_id":"openai/gpt-4o-mini","name":"OpenAI","role":"General reasoning"}]'
+      DEFAULT_CHAIRMAN: '{"model_id":"openai/gpt-4o-mini","name":"OpenAI Chair","role":"Synthesize the council response"}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +50,7 @@ services:
         condition: service_started
     volumes:
       - ./apps/backend:/app  # hot reload in dev
-    command: ["uvicorn", "synapse.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uv", "run", "uvicorn", "synapse.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "synapse"]
 
   # ---------------------------------------------------------------------------
   # Centrifugo — real-time WebSocket/SSE sidecar
@@ -51,16 +58,15 @@ services:
   centrifugo:
     image: centrifugo/centrifugo:v5
     ports:
-      - "8001:8001"   # WebSocket / SSE (client connections)
-      - "8002:8002"   # HTTP API (FastAPI publishes here)
+      - "8001:8000"   # WebSocket / SSE + HTTP API
     environment:
       CENTRIFUGO_TOKEN_HMAC_SECRET_KEY: ${CENTRIFUGO_TOKEN_SECRET:-dev-centrifugo-token-secret}
       CENTRIFUGO_API_KEY: ${CENTRIFUGO_API_KEY:-dev-centrifugo-api-key}
     volumes:
       - ./apps/backend/centrifugo.yaml:/centrifugo/config.yaml
-    command: centrifugo --config=/centrifugo/config.yaml
+    command: centrifugo --config=/centrifugo/config.yaml --port=8000 --health
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8001/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/health || exit 1"]
       interval: 3s
       timeout: 5s
       retries: 10
@@ -116,7 +122,7 @@ services:
       astrocyte-postgres:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/live || exit 1"]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8080/live', timeout=3).read()\""]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -136,7 +142,7 @@ services:
       POSTGRES_PASSWORD: astrocyte
       POSTGRES_DB: astrocyte
     ports:
-      - "5433:5432"
+      - "55433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U astrocyte -d astrocyte"]
       interval: 3s
