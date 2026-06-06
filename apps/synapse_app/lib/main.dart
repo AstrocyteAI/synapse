@@ -13,25 +13,22 @@ Future<void> main() async {
 
   final platform = PlatformDetails();
 
-  // Desktop-only window setup — must run BEFORE runApp so the first
-  // frame draws at the right size. window_manager throws if called on
-  // mobile platforms, so guard tightly.
   if (platform.isDesktop) {
     await windowManager.ensureInitialized();
-    const windowOptions = WindowOptions(
-      // First-launch size. We `maximize()` immediately below so this
-      // is really only the fallback / restore-after-unmaximize size.
-      size: Size(1440, 900),
-      minimumSize: Size(960, 640),
+    final windowOptions = WindowOptions(
       title: 'Synapse',
-      titleBarStyle: TitleBarStyle.normal,
+      size: const Size(1440, 900),
+      minimumSize: const Size(960, 640),
+      center: true,
+      skipTaskbar: false,
+      backgroundColor: Colors.transparent,
+      titleBarStyle: platform.isLinux
+          ? TitleBarStyle.normal
+          : TitleBarStyle.hidden,
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.show();
       await windowManager.focus();
-      // Slack/Teams behaviour: open large, but NOT macOS-fullscreen
-      // (which hides the menu bar). `maximize()` fills the screen
-      // without taking over the menu bar / Dock.
       await windowManager.maximize();
     });
   }
