@@ -28,7 +28,7 @@ dependencies:
   uuid: ^4.0.0
   # OIDC login via Casdoor (Cerebro jwt_oidc mode)
   casdoor_flutter_sdk: ^1.1.0
-  # Desktop window control — initial size, maximize, close-to-tray
+  # Desktop window chrome, initial size, maximize, close-to-tray
   window_manager: ^0.4.3
 
 dev_dependencies:
