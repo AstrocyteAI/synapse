@@ -88,6 +88,10 @@ class NotificationService {
       const InitializationSettings(
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(),
+        // flutter_local_notifications requires explicit Darwin settings
+        // for macOS even though the API shape mirrors iOS. Without this
+        // it throws "macOS settings must be set when targeting macOS".
+        macOS: DarwinInitializationSettings(),
       ),
       onDidReceiveNotificationResponse: _onNotificationTap,
     );
@@ -101,6 +105,11 @@ class NotificationService {
       await _local
           .resolvePlatformSpecificImplementation<
               IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(alert: true, badge: true, sound: true);
+    } else if (Platform.isMacOS) {
+      await _local
+          .resolvePlatformSpecificImplementation<
+              MacOSFlutterLocalNotificationsPlugin>()
           ?.requestPermissions(alert: true, badge: true, sound: true);
     }
 

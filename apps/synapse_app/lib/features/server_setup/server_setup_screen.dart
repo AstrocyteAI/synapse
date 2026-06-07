@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import '../../core/config/server_store.dart';
 import '../../core/auth/token_store.dart';
+import '../../core/routing/app_paths.dart';
 
 /// First-run and server-switch screen.
 ///
@@ -125,6 +126,27 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // Transparent AppBar with an always-present back affordance.
+      // If the GoRouter stack has a previous entry we pop; otherwise
+      // we fall back to the home shell so the user is never stranded
+      // (e.g. when deep-linked here, or after a hot-restart that lost
+      // the navigation stack).
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppPaths.home);
+            }
+          },
+        ),
+      ),
+      extendBodyBehindAppBar: true,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
