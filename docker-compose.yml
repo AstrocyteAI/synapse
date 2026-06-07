@@ -6,9 +6,9 @@
 # Services:
 #   synapse-backend     FastAPI council engine          http://localhost:8000
 #   centrifugo          Real-time WebSocket/SSE sidecar ws://localhost:8001
-#   postgres            Synapse PostgreSQL              localhost:5432
+#   postgres            Synapse PostgreSQL              localhost:${SYNAPSE_POSTGRES_PORT:-5432}
 #   astrocyte-gateway   Astrocyte memory gateway        http://localhost:8080 (internal)
-#   astrocyte-postgres  Astrocyte PostgreSQL            localhost:5433
+#   astrocyte-postgres  Astrocyte PostgreSQL            localhost:${ASTROCYTE_POSTGRES_PORT:-5433}
 
 services:
 
@@ -75,7 +75,7 @@ services:
       POSTGRES_PASSWORD: synapse
       POSTGRES_DB: synapse
     ports:
-      - "5432:5432"
+      - "${SYNAPSE_POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U synapse -d synapse"]
       interval: 3s
@@ -90,7 +90,7 @@ services:
   astrocyte-gateway:
     image: ghcr.io/astrocyteai/astrocyte/astrocyte-gateway-py:latest
     ports:
-      - "8080:8080"
+      - "${ASTROCYTE_GATEWAY_PORT:-8080}:8080"
     environment:
       ASTROCYTE_HOST: 0.0.0.0
       ASTROCYTE_PORT: 8080
@@ -136,7 +136,7 @@ services:
       POSTGRES_PASSWORD: astrocyte
       POSTGRES_DB: astrocyte
     ports:
-      - "5433:5432"
+      - "${ASTROCYTE_POSTGRES_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U astrocyte -d astrocyte"]
       interval: 3s
