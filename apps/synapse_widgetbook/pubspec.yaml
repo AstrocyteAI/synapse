@@ -1,0 +1,28 @@
+name: synapse_widgetbook
+description: "Widgetbook catalogue for Synapse — every reusable widget in every state."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  widgetbook: ^3.14.0
+  widgetbook_annotation: ^3.5.0
+  # Synapse app as a path dependency. Use cases import widgets from
+  # `package:synapse_app/...` so the catalogue exercises the SAME code
+  # that ships in the app — never re-implemented in the widgetbook.
+  synapse_app:
+    path: ../synapse_app
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  widgetbook_generator: ^3.12.0
+  build_runner: ^2.4.13
+
+flutter:
+  uses-material-design: true
