@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/auth/token_store.dart';
 import '../../core/config/server_store.dart';
+import '../../core/routing/app_paths.dart';
 
 class LoginScreen extends StatefulWidget {
   final TokenStore tokenStore;
@@ -178,6 +179,22 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back',
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go(AppPaths.home);
+            }
+          },
+        ),
+      ),
+      extendBodyBehindAppBar: true,
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),

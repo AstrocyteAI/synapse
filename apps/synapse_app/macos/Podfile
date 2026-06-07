@@ -38,5 +38,13 @@ end
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_macos_build_settings(target)
+
+    # Force every Pod (including resource-bundle sub-targets like
+    # `flutter_local_notifications-flutter_local_notifications_privacy`)
+    # to the same minimum macOS as the app. Without this Xcode 16 warns
+    # that 10.11 is below the supported floor of 10.13.
+    target.build_configurations.each do |config|
+      config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+    end
   end
 end
