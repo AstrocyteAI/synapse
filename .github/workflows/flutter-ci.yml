@@ -46,7 +46,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Pin Windows to 2022 runner. `windows-latest` is being redirected
+        # to a VS 2026 image (per GitHub annotation, by 2026-06-15), and
+        # Flutter 3.35.6's CMake generator still asks for "Visual Studio
+        # 16 2019" when vswhere can't classify the install — CMake then
+        # fails configure with "could not find any instance of Visual
+        # Studio." `windows-2022` ships VS 2022 which Flutter detects
+        # cleanly. Revert to `windows-latest` once we move to a Flutter
+        # SDK that understands VS 2026.
+        os: [ubuntu-latest, windows-2022, macos-latest]
 
     steps:
       - uses: actions/checkout@v5
@@ -86,7 +94,9 @@ jobs:
                 clang cmake ninja-build pkg-config \
                 libgtk-3-dev liblzma-dev libstdc++-12-dev \
                 libwebkit2gtk-4.1-dev
-          - os: windows-latest
+          # See note on the test matrix above: pin to windows-2022 until
+          # Flutter SDK supports VS 2026.
+          - os: windows-2022
             target: windows
             build-cmd: flutter build windows --debug
             setup: ""
