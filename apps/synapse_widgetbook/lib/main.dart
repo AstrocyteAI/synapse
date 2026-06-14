@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:synapse_app/ui/synapse_theme.dart';
 import 'package:widgetbook/widgetbook.dart';
 
-import 'use_cases/theme/app_colors_use_cases.dart';
-import 'use_cases/theme/app_spacing_use_cases.dart';
-import 'use_cases/theme/app_typography_use_cases.dart';
+import 'use_cases/theme/syn_colors_use_cases.dart';
+import 'use_cases/theme/syn_spacing_use_cases.dart';
+import 'use_cases/theme/syn_typography_use_cases.dart';
 
 void main() => runApp(const SynapseWidgetbookApp());
 
@@ -11,11 +12,9 @@ void main() => runApp(const SynapseWidgetbookApp());
 ///
 /// Run with: `flutter run -d <device>` from `apps/synapse_widgetbook/`.
 ///
-/// As reusable widgets are added to `package:synapse_app/widgets/...`
-/// they MUST gain at least three use_cases here (default / empty /
-/// error) before merging. See
-/// `cerebro/docs/_design/synapse-chat-execution-plan.md §7` for the
-/// Widgetbook discipline rules.
+/// As reusable widgets are added to `package:synapse_app/ui/...` they
+/// should gain at least three use_cases here (default / empty / error)
+/// before merging.
 class SynapseWidgetbookApp extends StatelessWidget {
   const SynapseWidgetbookApp({super.key});
 
@@ -25,7 +24,7 @@ class SynapseWidgetbookApp extends StatelessWidget {
       addons: [
         ThemeAddon<ThemeData>(
           themes: [
-            WidgetbookTheme(name: 'Dark', data: ThemeData.dark()),
+            WidgetbookTheme(name: 'Synapse Dark', data: buildSynapseTheme()),
             WidgetbookTheme(name: 'Light', data: ThemeData.light()),
           ],
           themeBuilder: (context, theme, child) =>
@@ -41,13 +40,11 @@ class SynapseWidgetbookApp extends StatelessWidget {
         WidgetbookFolder(
           name: 'Theme',
           children: [
-            ...appColorsUseCases,
-            ...appSpacingUseCases,
-            ...appTypographyUseCases,
+            ...synColorsUseCases,
+            ...synSpacingUseCases,
+            ...synTypographyUseCases,
           ],
         ),
-        // Add 'Chat', 'Status', 'Council' folders here as widgets are
-        // extracted from the existing screens into reusable components.
       ],
     );
   }

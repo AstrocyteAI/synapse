@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:synapse_app/core/theme/app_spacing.dart';
+import 'package:synapse_app/ui/synapse_tokens.dart';
 import 'package:widgetbook/widgetbook.dart';
 
-final appSpacingUseCases = [
+final synSpacingUseCases = [
   WidgetbookComponent(
-    name: 'AppSpacing',
+    name: 'SynSpacing',
     useCases: [
       WidgetbookUseCase(
         name: 'Ladder visual',
@@ -18,20 +18,19 @@ class _SpacingLadder extends StatelessWidget {
   const _SpacingLadder();
 
   static const _steps = <(String, double)>[
-    ('xxs', AppSpacing.xxs),
-    ('xs', AppSpacing.xs),
-    ('sm', AppSpacing.sm),
-    ('md', AppSpacing.md),
-    ('lg', AppSpacing.lg),
-    ('xl', AppSpacing.xl),
-    ('xxl', AppSpacing.xxl),
-    ('xxxl', AppSpacing.xxxl),
+    ('xxs', SynSpacing.xxs),
+    ('xs', SynSpacing.xs),
+    ('sm', SynSpacing.sm),
+    ('md', SynSpacing.md),
+    ('lg', SynSpacing.lg),
+    ('xl', SynSpacing.xl),
+    ('xxl', SynSpacing.xxl),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.md),
+      padding: const EdgeInsets.all(SynSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -49,7 +48,7 @@ class _SpacingLadder extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: SynSpacing.xs),
           ],
         ],
       ),

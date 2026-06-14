@@ -81,7 +81,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final issuer = _oidcIssuer;
     final clientId = _oidcClientId;
     if (issuer == null || clientId == null) {
-      setState(() => _error = 'OIDC configuration missing. Re-connect to the server.');
+      setState(
+        () => _error = 'OIDC configuration missing. Re-connect to the server.',
+      );
       return;
     }
 
@@ -117,7 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
       await widget.tokenStore.setToken(accessToken);
       if (mounted) context.go('/councils');
     } catch (e) {
-      setState(() => _error = 'Sign-in failed: ${e.toString().split('\n').first}');
+      setState(
+        () => _error = 'Sign-in failed: ${e.toString().split('\n').first}',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -158,7 +162,10 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _error = 'Login failed (${response.statusCode}).');
       }
     } catch (e) {
-      setState(() => _error = 'Could not reach server: ${e.toString().split('\n').first}');
+      setState(
+        () => _error =
+            'Could not reach server: ${e.toString().split('\n').first}',
+      );
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -232,7 +239,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: Text(
                           _serverUrl!,
                           style: const TextStyle(
-                              color: Colors.white38, fontSize: 12),
+                            color: Colors.white38,
+                            fontSize: 12,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -255,7 +264,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (_error != null) ...[
                   Text(
                     _error!,
-                    style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),

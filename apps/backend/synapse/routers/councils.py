@@ -649,6 +649,7 @@ def _session_summary(s) -> dict:
         "consensus_score": s.consensus_score,
         "created_at": s.created_at.isoformat(),
         "closed_at": s.closed_at.isoformat() if s.closed_at else None,
+        "failure_reason": s.config.get("_error") if s.config else None,
         "conflict_detected": bool(s.conflict_metadata.get("detected"))
         if s.conflict_metadata
         else False,
@@ -669,6 +670,7 @@ def _session_detail(s) -> dict:
         "template_id": s.template_id,
         "created_at": s.created_at.isoformat(),
         "closed_at": s.closed_at.isoformat() if s.closed_at else None,
+        "failure_reason": s.config.get("_error") if s.config else None,
         "members": s.members,
         "chairman": s.chairman,
         "conflict_metadata": s.conflict_metadata,
