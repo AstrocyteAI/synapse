@@ -26,7 +26,7 @@ dependencies = [
     # LLM — Pydantic AI (v1+ stable since Sep 2025) gives us typed-output
     # validation, native multi-provider routing across 10+ providers, MCP
     # client + server support, and Logfire-compatible OTel tracing. Replaces
-    # the earlier LiteLLM-only client. See synapse/llm/client.py.
+    # the earlier single-gateway client. See synapse/llm/client.py.
     "pydantic-ai>=1.0",
     # SSE streaming
     "sse-starlette>=2.1",

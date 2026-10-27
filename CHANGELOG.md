@@ -7,6 +7,17 @@ versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **The optional LLM proxy is now an AISIX gateway, not LiteLLM.** Set
+  `LLM_GATEWAY_BASE_URL` (and `LLM_GATEWAY_API_KEY`, an AISIX caller key) to
+  route every council and chat call through it; model names are then AISIX
+  model aliases. With no gateway configured, each provider is called directly as
+  before. **Breaking:** `LITELLM_API_BASE` / `LITELLM_API_KEY` are gone, and a
+  deployment that still sets `LITELLM_API_BASE` now fails at startup with the
+  rename to make, instead of silently calling providers directly.
+  `SYNAPSE_LLM_PROVIDER` is removed; a leftover value is ignored.
+
 ## [0.2.4] — 2026-05-24
 
 Third (and hopefully final) follow-up to v0.2.1's web-build break.

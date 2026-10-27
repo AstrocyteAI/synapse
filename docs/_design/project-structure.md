@@ -309,7 +309,8 @@ flutter run -d macos
 | `CENTRIFUGO_API_URL` | `http://centrifugo:8000` | Centrifugo HTTP API base URL |
 | `CENTRIFUGO_API_KEY` | — | Centrifugo server-side API key (publish, presence) |
 | `CENTRIFUGO_TOKEN_SECRET` | — | HMAC secret for signing client connection JWTs |
-| `SYNAPSE_LLM_PROVIDER` | `openrouter` | `openrouter`, `litellm`, or `direct` |
+| `LLM_GATEWAY_BASE_URL` | — | Route every LLM call through an OpenAI-compatible gateway such as AISIX (model names are then gateway aliases); empty = call providers directly |
+| `LLM_GATEWAY_API_KEY` | — | Gateway caller key |
 | `OPENROUTER_API_KEY` | — | Required for OpenRouter |
 | `SYNAPSE_AUTH_MODE` | `dev` | `dev`, `api_key`, or `jwt_oidc` |
 | `SYNAPSE_JWT_JWKS_URL` | — | JWKS endpoint for JWT validation |

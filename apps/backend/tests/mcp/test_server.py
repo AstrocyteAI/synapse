@@ -58,9 +58,8 @@ def _make_settings() -> MagicMock:
     s.stage2_timeout_seconds = 60
     s.stage3_timeout_seconds = 90
     s.max_precedents = 5
-    s.litellm_api_base = ""
-    s.litellm_api_key = ""
-    s.synapse_llm_provider = "litellm"
+    s.llm_gateway_base_url = ""
+    s.llm_gateway_api_key = ""
     return s
 
 

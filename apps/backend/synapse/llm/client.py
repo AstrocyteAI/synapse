@@ -1,6 +1,6 @@
 """LLM client — Pydantic AI-backed wrapper for uniform multi-model access.
 
-Replaces the earlier LiteLLM-only client (v0.x). Pydantic AI brings:
+Replaces the earlier single-gateway client (v0.x). Pydantic AI brings:
 
   * Native multi-provider routing (OpenAI / Anthropic / Google / Bedrock /
     Groq / Cerebras / xAI / OpenRouter / Ollama / Mistral / etc.) without
@@ -9,10 +9,10 @@ Replaces the earlier LiteLLM-only client (v0.x). Pydantic AI brings:
     want typed verdicts / rankings — see ``output_type`` parameter).
   * Built-in Logfire / OpenTelemetry instrumentation hooks for tracing
     every LLM call with GenAI semantic conventions.
-  * Stable v1 contract (since September 2025) — replaces the LiteLLM
+  * Stable v1 contract (since September 2025) — replaces the earlier
     cycle-of-breaking-changes problem.
 
-Public API preserved from the LiteLLM-era v0.x:
+Public API preserved from the v0.x client:
 
   * ``LLMClient.complete(model, messages, temperature=, max_tokens=)``
     → returns the text content string.
@@ -67,7 +67,7 @@ class LLMClient:
 
         ``model`` accepts the same identifiers Synapse has always used —
         bare names (``"gpt-4o"``, ``"claude-3-5-sonnet-20241022"``) or
-        LiteLLM-style prefixed (``"anthropic/claude-..."``, ``"gemini/..."``).
+        vendor-prefixed (``"anthropic/claude-..."``, ``"gemini/..."``).
         Translation to Pydantic AI's canonical ``provider:model`` spec is
         handled internally.
 
@@ -113,20 +113,21 @@ class LLMClient:
         """Translate Synapse's model identifier to a Pydantic AI model.
 
         Three cases:
-          * If ``litellm_api_base`` is set in settings, route every call
+          * If ``llm_gateway_base_url`` is set in settings, route every call
             through that endpoint via Pydantic AI's OpenAI-compatible
-            provider, preserving the LiteLLM-proxy escape hatch for
-            customers who run an upstream gateway.
+            provider, for deployments that run an AISIX gateway. The model
+            name is then the gateway's alias, sent without any vendor
+            prefix.
           * Otherwise, translate to ``provider:model`` format and return
             the string — Pydantic AI's factory resolves it.
-          * Bare names default to ``openai:`` (matches LiteLLM behaviour).
+          * Bare names default to ``openai:``.
         """
-        if self._settings.litellm_api_base:
+        if self._settings.llm_gateway_base_url:
             return OpenAIChatModel(
                 _strip_provider_prefix(model),
                 provider=OpenAIProvider(
-                    base_url=self._settings.litellm_api_base,
-                    api_key=self._settings.litellm_api_key or "sk-placeholder",
+                    base_url=self._settings.llm_gateway_base_url,
+                    api_key=self._settings.llm_gateway_api_key or "sk-placeholder",
                 ),
             )
 
@@ -136,7 +137,7 @@ class LLMClient:
 def derive_display_name(model_id: str) -> str:
     """Derive a readable display name from a model ID when no name is provided.
 
-    Unchanged from the LiteLLM-era client; the rendering rules don't depend
+    Unchanged from the v0.x client; the rendering rules don't depend
     on which library actually calls the model.
     """
     lower = model_id.lower()
@@ -165,7 +166,7 @@ def derive_display_name(model_id: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-# Map LiteLLM-style provider prefixes (used in Synapse's existing default
+# Map vendor prefixes (used in Synapse's existing default
 # model list) to Pydantic AI's canonical provider IDs.
 _PROVIDER_PREFIX_MAP = {
     "openai": "openai",
@@ -192,15 +193,14 @@ def _to_pydantic_ai_model_spec(model: str) -> str:
       * ``"claude-3-5-sonnet-..."``   → ``"anthropic:claude-3-5-sonnet-..."`` (inferred from name)
       * ``"o1-preview"``              → ``"openai:o1-preview"`` (inferred OpenAI o-series)
 
-    Bare-name inference matches LiteLLM's behaviour where it could —
-    "claude" / "gemini" / "grok" / "llama" names route to their canonical
+    Bare-name inference: "claude" / "gemini" / "grok" / "llama" names route to their canonical
     providers without explicit prefix.
     """
     # Already in pydantic-ai canonical form.
     if ":" in model:
         return model
 
-    # LiteLLM-style "provider/model" prefix.
+    # "provider/model" vendor prefix.
     if "/" in model:
         provider, name = model.split("/", 1)
         canonical = _PROVIDER_PREFIX_MAP.get(provider.lower(), provider.lower())
@@ -227,7 +227,7 @@ def _strip_provider_prefix(model: str) -> str:
     """Strip vendor prefix from a model string.
 
     Used when routing through a custom OpenAI-compatible endpoint that
-    expects bare model names (e.g., a LiteLLM proxy).
+    expects bare model names (e.g., an AISIX gateway's model alias).
     """
     if ":" in model:
         return model.split(":", 1)[1]
@@ -257,7 +257,7 @@ def _split_messages(
     Edge cases:
       * If the message list contains no user message (only system),
         the user_prompt is an empty string and Pydantic AI will rely on
-        the system prompt alone — matches LiteLLM behaviour.
+        the system prompt alone.
       * If the final message is an assistant turn (rare — partial
         completion), it goes into history and user_prompt is empty.
     """

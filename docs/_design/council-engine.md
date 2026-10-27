@@ -509,7 +509,7 @@ council:
   default_chairman:
     model_id: anthropic/claude-opus-4-7
     name: Chair
-  llm_provider: openrouter          # or litellm, direct
+  llm_provider: openrouter          # or aisix, direct
   stage2_anonymise: true
   stage1_timeout_seconds: 60
   stage2_timeout_seconds: 60

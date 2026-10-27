@@ -45,7 +45,7 @@ await centrifugo.publish(
 
 ### HTTP and integrations
 
-**httpx** — async HTTP client for Astrocyte gateway calls, LLM provider APIs (OpenRouter, LiteLLM), and Stripe.
+**httpx** — async HTTP client for Astrocyte gateway calls, LLM provider APIs (OpenRouter, an AISIX gateway), and Stripe.
 
 **python-jose** — JWT decoding and RS256 signature validation.
 
@@ -61,7 +61,7 @@ await centrifugo.publish(
 
 **OpenRouter** (default) — single API endpoint for 100+ models. One auth token, one rate-limit surface, uniform interface across GPT, Claude, Gemini, Grok, and open-weight models. Ideal for councils that mix models from multiple providers.
 
-**LiteLLM** (alternative) — self-hosted proxy with the same multi-provider benefit. Preferred when teams require on-premise routing or want to avoid third-party intermediaries.
+**AISIX** (alternative) — self-hosted, open-source (Apache-2.0) gateway with the same multi-provider benefit: one OpenAI-compatible endpoint in front of OpenAI, Anthropic, Bedrock, Vertex, Azure and compatible vendors, a single Rust binary with no database. Preferred when teams require on-premise routing or want to avoid third-party intermediaries. Set `LLM_GATEWAY_BASE_URL` and use the gateway's model aliases as model names.
 
 Direct SDK calls are supported for single-provider councils where OpenRouter overhead is not justified.
 
@@ -160,5 +160,5 @@ The backend emits an **OpenAPI schema** at `/openapi.json`. Typed clients are ge
 | Flutter web | Not used | Flutter web | Bundle size; browser feel; Svelte is better for the browser surface |
 | Integration bots | Python (uv) | Elixir, TypeScript | Thin adapters calling REST API; Slack Bolt, Pycord, python-telegram-bot are mature |
 | Package manager (JS) | pnpm + Turborepo | npm, yarn, nx | Monorepo-native; build caching |
-| LLM access | OpenRouter (default) | LiteLLM, direct SDKs | Multi-model; single auth; council flexibility |
+| LLM access | OpenRouter (default) | AISIX, direct SDKs | Multi-model; single auth; council flexibility |
 | Auth | JWT RS256 / OIDC + python-jose | API key only | Stateless; matches Astrocyte gateway; multi-tenant ready |

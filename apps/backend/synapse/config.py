@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,9 +45,16 @@ class Settings(BaseSettings):
     synapse_local_registration_open: bool = True  # False = only admins can create users
 
     # --- LLM ---
-    synapse_llm_provider: Literal["litellm"] = "litellm"
-    litellm_api_base: str = ""  # empty = direct library calls; set for proxy
-    litellm_api_key: str = ""
+    # Empty = call each provider directly (Pydantic AI). Set to route every call
+    # through an OpenAI-compatible gateway such as AISIX; model names are then the
+    # gateway's model aliases. Named LLM_GATEWAY_*, not AISIX_*, because AISIX warns
+    # about unknown AISIX_* variables when one env file feeds both processes.
+    llm_gateway_base_url: str = ""
+    llm_gateway_api_key: str = ""
+    # Removed. Kept only so a deployment still pointing at the retired LiteLLM
+    # proxy fails at startup instead of silently calling providers directly,
+    # bypassing the gateway it meant to use. See `_reject_retired_litellm`.
+    litellm_api_base: str = ""
 
     # --- Council defaults ---
     default_members: list[dict] = [
@@ -102,6 +110,16 @@ class Settings(BaseSettings):
     # value in production — the default empty string disables the DSAR
     # endpoints (router returns 503).
     synapse_dsar_signing_secret: str = ""
+
+    @model_validator(mode="after")
+    def _reject_retired_litellm(self) -> Settings:
+        if self.litellm_api_base:
+            raise ValueError(
+                "LITELLM_API_BASE is no longer supported: LiteLLM was replaced by "
+                "AISIX. Set LLM_GATEWAY_BASE_URL (and LLM_GATEWAY_API_KEY, an AISIX "
+                "caller key) instead, and use AISIX model aliases as model names."
+            )
+        return self
 
 
 @lru_cache(maxsize=1)

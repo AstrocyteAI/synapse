@@ -27,7 +27,7 @@ Synapse owns:
 
 Synapse does **not** own:
 - Memory storage, retrieval, or synthesis — that is Astrocyte
-- LLM routing or normalisation — that is the LLM provider (OpenRouter, LiteLLM, direct SDKs)
+- LLM routing or normalisation — that is the LLM provider (OpenRouter, an AISIX gateway, direct SDKs)
 - Agent orchestration graphs or tool loops — that is the calling agent framework
 
 ---
